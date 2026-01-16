@@ -49,7 +49,7 @@ function SignupContent() {
 
   const initPayment = async (tier, email) => {
     try {
-      const res = await fetch("http://localhost:5000/api/create-payment-intent", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/create-payment-intent`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ planTier: tier, email }),
@@ -70,12 +70,12 @@ function SignupContent() {
   const handleGoogleAuth = async (credentialResponse) => {
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:5000/api/google-login", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/google-login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           token: credentialResponse.credential,
-          planTier: selectedPlan?.tier 
+          planTier: selectedPlan?.tier
         }),
       });
 
@@ -101,7 +101,7 @@ function SignupContent() {
     setLoading(true);
     try {
       const endpoint = isLogin ? "/api/login" : "/api/signup";
-      const res = await fetch(`http://localhost:5000${endpoint}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...formData, planTier: selectedPlan?.tier }),

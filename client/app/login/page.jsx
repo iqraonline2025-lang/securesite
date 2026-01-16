@@ -46,10 +46,10 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch("http://localhost:5000/api/google-login", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/google-login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           token: credentialResponse.credential,
           planTier: "Free" // Default tier if they are a first-time user via Login page
         }),

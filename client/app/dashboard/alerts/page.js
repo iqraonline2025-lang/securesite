@@ -49,7 +49,9 @@ export default function ScamAlertsPage() {
 
       try {
         if (user && user.email) {
-          const res = await fetch(`http://localhost:5000/api/alerts/${user.email}`);
+          const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
+const res = await fetch(`${API_URL}/api/alerts/${user.email}`);
           const data = await res.json();
           
           // Use DB data if available, otherwise use mock data

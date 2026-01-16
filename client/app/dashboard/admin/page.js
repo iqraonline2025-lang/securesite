@@ -6,7 +6,10 @@ export default function AdminDashboard() {
   const [data, setData] = useState({ users: [], reports: [], stats: {} });
 
   useEffect(() => {
-    fetch("http://localhost:5000/api/admin/stats")
+    const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
+fetch(`${API_URL}/api/admin/stats`)
+
       .then(res => res.json())
       .then(setData);
   }, []);
