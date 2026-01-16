@@ -1,0 +1,14 @@
+[
+  {
+    "id": 1,
+    "title": "The Urgency Trap",
+    "description": "Scammers create a sense of panic (e.g., 'Your account is locked!') to stop you from thinking clearly.",
+    "category": "Daily Tip"
+  },
+  {
+    "id": 2,
+    "title": "Phishing via SMS",
+    "description": "Known as 'Smishing'. Never click links in texts from unknown numbers, even if they look like your bank.",
+    "category": "Scam Type"
+  }
+]

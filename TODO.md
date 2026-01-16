@@ -1,0 +1,2 @@
+- [x] Update LOGO_PATH in client/app/components/Navbar.jsx to "/logo-1.jpeg"
+- [x] Fix import and export in client/app/page.js to use ES6 syntax and correct Navbar path
