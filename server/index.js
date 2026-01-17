@@ -13,7 +13,7 @@ const app = express();
 
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? ['https://your-frontend-domain.onrender.com', 'https://your-backend.onrender.com'] 
+    ? ['https://securesite-sd8e.vercel.app', 'https://securesite-backend.onrender.com'] 
     : 'http://localhost:3000',
   credentials: true
 }));
