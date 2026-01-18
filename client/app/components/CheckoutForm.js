@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { Loader2, ShieldCheck } from "lucide-react";
+import { motion } from "framer-motion";
 
 export default function CheckoutForm({ amount, onSuccess }) {
   const stripe = useStripe();
@@ -17,41 +18,57 @@ export default function CheckoutForm({ amount, onSuccess }) {
     setLoading(true);
     setErrorMessage(null);
 
-    // 1. Confirm the payment
+    // 1. Confirm the payment with Stripe
     const { error, paymentIntent } = await stripe.confirmPayment({
       elements,
       confirmParams: {
-        // Fallback return URL if a bank redirect is actually required
         return_url: `${window.location.origin}/signup?payment_intent_return=true`,
       },
-      redirect: "if_required", // CRITICAL: Stays on page if payment is instant (cards)
+      redirect: "if_required", 
     });
 
     if (error) {
       setErrorMessage(error.message);
       setLoading(false);
     } else if (paymentIntent && paymentIntent.status === "succeeded") {
-      // 2. PAYMENT SUCCESS: Trigger the Step 4 SuccessView in SignupPage
-      if (onSuccess) {
-        onSuccess();
+      // 2. BACKEND VERIFICATION: Update the user's tier in your DB
+      try {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/verify-payment`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ paymentIntentId: paymentIntent.id }),
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          // 3. SUCCESS: Trigger the UI success state and pass the updated user data
+          if (onSuccess) {
+            onSuccess(data.user); 
+          }
+        } else {
+          setErrorMessage(data.message || "Failed to verify upgrade. Contact support.");
+          setLoading(false);
+        }
+      } catch (err) {
+        setErrorMessage("Network error during verification.");
+        setLoading(false);
       }
     } else {
-      // Handle other statuses like 'processing'
-      setErrorMessage("Payment is being processed. Please check your dashboard later.");
+      setErrorMessage("Payment status: " + (paymentIntent?.status || "unknown"));
       setLoading(false);
     }
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6 text-left">
-      {/* Stripe Payment Element */}
       <div className="bg-black/20 p-4 rounded-2xl border border-white/5">
         <PaymentElement 
           options={{
             layout: "tabs",
             theme: 'night',
             variables: { 
-              colorPrimary: '#3b82f6', // Changed to Blue to match your primary branding
+              colorPrimary: '#3b82f6', 
               colorBackground: '#111111',
               colorText: '#ffffff',
               borderRadius: '12px',
