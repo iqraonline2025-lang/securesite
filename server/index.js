@@ -13,7 +13,7 @@ const app = express();
 
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? ['https://securesite-2fow.vercel.app/', 'https://securesite-end.onrender.com'] 
+    ? ['https://securesite-2fow.vercel.app/', 'https://securesite-bend.onrender.com'] 
     : 'http://localhost:3000',
   credentials: true
 }));
