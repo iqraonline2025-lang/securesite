@@ -77,3 +77,7 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Shield Server running on port ${PORT}`);
 });
+=======
+  console.log(`🚀 Shield Server running on http://localhost:${PORT}`);
+});
+>>>>>>> d3fa03ea06916ccb0905d0d4a5a60cdaa8b2ff7a
