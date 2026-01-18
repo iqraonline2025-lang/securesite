@@ -17,25 +17,21 @@ const app = express();
 const allowedOrigins = [
   "http://localhost:3000",
   "https://securesite-2fow.vercel.app",
-  "https://securesite-tend.onrender.com"
+  "https://securesite-tend.onrender.com",
+  "https://securesite-send.onrender.com"
 ];
 
 app.use(cors({
-<<<<<<< HEAD
-  origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-      return callback(new Error(msg), false);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('The CORS policy for this site does not allow access from the specified Origin.'), false);
     }
-    return callback(null, true);
   },
-=======
-  origin: process.env.NODE_ENV === 'production' 
-    ? ['https://securesite-2fow.vercel.app', 'https://securesite-send.onrender.com'] 
-    : 'http://localhost:3000',
->>>>>>> d3fa03ea06916ccb0905d0d4a5a60cdaa8b2ff7a
   credentials: true
 }));
 
@@ -43,7 +39,7 @@ app.use(cors({
 // 2️⃣ Middleware
 // -------------------------
 app.use(express.json());
-app.use(express.urlencoded({ extended: true })); // Good for form submissions
+app.use(express.urlencoded({ extended: true }));
 
 // -------------------------
 // 3️⃣ Static Files
@@ -65,7 +61,7 @@ app.get("/", (req, res) => {
 });
 
 // -------------------------
-// 5️⃣ Error Handling (The Missing Piece)
+// 5️⃣ Error Handling
 // -------------------------
 app.use((err, req, res, next) => {
   console.error(err.stack);
@@ -79,10 +75,5 @@ app.set("trust proxy", 1);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-<<<<<<< HEAD
   console.log(`🚀 Shield Server running on port ${PORT}`);
 });
-=======
-  console.log(`🚀 Shield Server running on http://localhost:${PORT}`);
-});
->>>>>>> d3fa03ea06916ccb0905d0d4a5a60cdaa8b2ff7a

@@ -1,6 +1,6 @@
 "use client";
 import React, { useState } from "react";
-import { useRouter } from "next/navigation"; // Import the router for programmatic navigation
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, Zap, Building2, GraduationCap, User, ShieldCheck } from "lucide-react";
 
@@ -30,7 +30,7 @@ const plans = [
     benefits: ["Team Training", "Admin Dashboard", "API Access"],
   },
   {
-    id: "lab", // Changed to 'lab' to match your Settings logic
+    id: "lab",
     tier: "Lab",
     price: "$25",
     icon: <GraduationCap size={32} />,
@@ -40,42 +40,46 @@ const plans = [
 ];
 
 export default function PlansRadial() {
-  const [activeTab, setActiveTab] = useState(plans[1]); // Default to Premium
+  const [activeTab, setActiveTab] = useState(plans[1]);
   const router = useRouter();
 
-  // Redirect function
   const handlePlanSelection = () => {
-    // Redirect to signup and pass the plan ID as a query param
     router.push(`/signup?plan=${activeTab.id}`);
   };
 
   return (
-    <section className="relative py-32 bg-[#020202] min-h-screen flex items-center justify-center overflow-hidden">
-      {/* Background Glow */}
+    <section id="plans" className="relative py-20 md:py-32 bg-[#020202] min-h-screen flex items-center justify-center overflow-hidden">
+      {/* Background Glow - Responsive size */}
       <div 
-        className="absolute w-[600px] h-[600px] rounded-full opacity-20 blur-[120px] transition-colors duration-1000"
+        className="absolute w-[300px] h-[300px] md:w-[600px] md:h-[600px] rounded-full opacity-20 blur-[80px] md:blur-[120px] transition-colors duration-1000"
         style={{ backgroundColor: activeTab.color }}
       />
 
-      <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-20 items-center z-10">
+      <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center z-10">
         
         {/* LEFT: THE INTERACTIVE HUB */}
-        <div className="relative flex items-center justify-center h-[500px]">
-          <div className="absolute w-[350px] h-[350px] border border-white/5 rounded-full" />
+        <div className="relative flex items-center justify-center h-[350px] md:h-[500px] order-2 lg:order-1">
+          {/* Inner Circles - Scaled for mobile */}
+          <div className="absolute w-[200px] h-[200px] md:w-[350px] md:h-[350px] border border-white/5 rounded-full" />
           
           <motion.div 
             animate={{ rotate: 360 }}
             transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-            className="absolute w-[450px] h-[450px] border border-dashed border-blue-500/20 rounded-full"
+            className="absolute w-[280px] h-[280px] md:w-[450px] md:h-[450px] border border-dashed border-blue-500/20 rounded-full"
           />
 
-          <div className="relative z-20 bg-black p-8 rounded-full border-4 border-white/10 shadow-[0_0_50px_rgba(255,255,255,0.05)]">
-             <ShieldCheck size={64} style={{ color: activeTab.color }} className="transition-colors duration-500" />
+          {/* Central Shield Icon */}
+          <div className="relative z-20 bg-black p-5 md:p-8 rounded-full border-4 border-white/10 shadow-[0_0_50px_rgba(255,255,255,0.05)]">
+             <ShieldCheck size={40} md={64} style={{ color: activeTab.color }} className="transition-colors duration-500" />
           </div>
 
+          {/* Radial Plan Buttons */}
           {plans.map((plan, i) => {
             const angle = (i * 360) / plans.length;
             const isActive = activeTab.id === plan.id;
+            
+            // Dynamic Radius: Smaller on mobile (120px) vs Desktop (200px)
+            const radius = typeof window !== "undefined" && window.innerWidth < 768 ? 120 : 200;
 
             return (
               <motion.button
@@ -83,73 +87,75 @@ export default function PlansRadial() {
                 onClick={() => setActiveTab(plan)}
                 initial={false}
                 animate={{
-                  x: Math.cos((angle * Math.PI) / 180) * 200,
-                  y: Math.sin((angle * Math.PI) / 180) * 200,
-                  scale: isActive ? 1.2 : 1,
+                  x: Math.cos((angle * Math.PI) / 180) * radius,
+                  y: Math.sin((angle * Math.PI) / 180) * radius,
+                  scale: isActive ? 1.1 : 0.9,
                 }}
-                className={`absolute p-5 rounded-2xl border-2 transition-all duration-500 ${
+                className={`absolute p-3 md:p-5 rounded-xl md:rounded-2xl border-2 transition-all duration-500 ${
                   isActive 
-                  ? "bg-white text-black border-white shadow-[0_0_30px_white]" 
+                  ? "bg-white text-black border-white shadow-[0_0_20px_white]" 
                   : "bg-black text-white border-white/10 hover:border-white/30"
                 }`}
               >
-                {plan.icon}
+                {/* Responsive icon sizes */}
+                {React.cloneElement(plan.icon, { size: typeof window !== "undefined" && window.innerWidth < 768 ? 20 : 32 })}
               </motion.button>
             );
           })}
         </div>
 
         {/* RIGHT: DYNAMIC CONTENT AREA */}
-        <div className="h-[400px] flex flex-col justify-center">
+        <div className="min-h-[350px] md:h-[400px] flex flex-col justify-center text-center lg:text-left order-1 lg:order-2">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab.id}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.4 }}
-              className="space-y-6"
+              className="space-y-4 md:space-y-6"
             >
-              <span className="text-blue-500 font-mono font-black tracking-widest uppercase">
-                {activeTab.tier}
+              <span className="text-blue-500 font-mono font-black tracking-widest uppercase text-xs md:text-sm">
+                {activeTab.tier} Security Tier
               </span>
-              <h3 className="text-6xl font-black text-white tracking-tighter">
+              <h3 className="text-5xl md:text-7xl font-black text-white tracking-tighter">
                 {activeTab.price}
-                <span className="text-xl text-gray-500 font-normal">/month</span>
+                <span className="text-lg md:text-xl text-gray-500 font-normal">/month</span>
               </h3>
-              <p className="text-gray-400 text-lg max-w-md italic">
-                Our {activeTab.tier} shield provides robust coverage specifically tailored for {activeTab.id === 'lab' ? 'security laboratories' : 'your digital safety'}.
+              <p className="text-gray-400 text-sm md:text-lg max-w-md mx-auto lg:mx-0 italic leading-relaxed">
+                Our {activeTab.tier} shield provides robust coverage tailored for {activeTab.id === 'lab' ? 'security laboratories' : 'your digital safety'}.
               </p>
               
-              <ul className="grid grid-cols-1 gap-4 pt-6">
+              <ul className="grid grid-cols-1 gap-3 md:gap-4 pt-4 justify-items-center lg:justify-items-start">
                 {activeTab.benefits.map((benefit, i) => (
                   <motion.li 
                     key={i}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: i * 0.1 }}
-                    className="flex items-center gap-3 text-white font-medium"
+                    className="flex items-center gap-3 text-white text-sm md:text-base font-medium"
                   >
-                    <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center">
-                      <Check size={14} className="text-blue-500" />
+                    <div className="w-5 h-5 md:w-6 md:h-6 rounded-full bg-blue-500/20 flex items-center justify-center shrink-0">
+                      <Check size={12} className="text-blue-500" />
                     </div>
                     {benefit}
                   </motion.li>
                 ))}
               </ul>
 
-              {/* ACTION BUTTON WITH REDIRECT */}
-              <button 
-                onClick={handlePlanSelection}
-                className="mt-10 px-10 py-4 rounded-xl font-black transition-all hover:scale-105 active:scale-95 shadow-xl"
-                style={{ 
-                  backgroundColor: activeTab.color, 
-                  color: 'white',
-                  boxShadow: `0 10px 30px -10px ${activeTab.color}80` 
-                }}
-              >
-                Get Started with {activeTab.tier}
-              </button>
+              <div className="pt-6">
+                <button 
+                  onClick={handlePlanSelection}
+                  className="w-full md:w-auto px-8 md:px-12 py-3 md:py-4 rounded-xl font-black transition-all hover:scale-105 active:scale-95 text-sm md:text-base"
+                  style={{ 
+                    backgroundColor: activeTab.color, 
+                    color: 'white',
+                    boxShadow: `0 10px 30px -10px ${activeTab.color}80` 
+                  }}
+                >
+                  Deploy {activeTab.tier} Shield
+                </button>
+              </div>
             </motion.div>
           </AnimatePresence>
         </div>

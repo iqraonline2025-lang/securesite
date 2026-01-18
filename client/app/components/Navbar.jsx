@@ -3,10 +3,7 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { gsap } from "gsap";
 import { ScrollToPlugin } from "gsap/ScrollToPlugin";
-import { 
-  Menu, X, ChevronDown, LayoutDashboard, 
-  Bell, ShieldAlert, LogOut, Shield 
-} from "lucide-react";
+import { Menu, X, Shield } from "lucide-react";
 
 const navLinks = [
   { name: "Home", href: "#home", id: "home" },
@@ -22,11 +19,9 @@ export default function Navbar() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
-    // Auth Check
     const savedUser = localStorage.getItem("user");
     if (savedUser) setIsLoggedIn(true);
 
-    // Scroll Highlight Logic
     const observerOptions = {
       root: null,
       rootMargin: "-20% 0px -70% 0px",
@@ -61,29 +56,29 @@ export default function Navbar() {
         scrollTo: { y: target, offsetY: 80 },
         ease: "power2.inOut",
       });
-      setIsMobileMenuOpen(false);
+      setIsMobileMenuOpen(false); // Close menu on click
     }
   };
 
   return (
     <>
-      {/* IMPORTANT: 'sticky top-0' and 'z-[999]' make the bar stay. 
-        'w-full' and 'bg-black/80' ensure the background is visible.
+      {/* 1️⃣ DESKTOP & BASE NAVBAR 
+          Tailwind 'md:' classes handle the media queries.
       */}
-      <nav className="sticky top-0 w-full z-[999] h-20 bg-black/80 backdrop-blur-xl border-b border-white/10 flex items-center px-6 md:px-12 justify-between">
+      <nav className="sticky top-0 w-full z-[999] h-20 bg-black/80 backdrop-blur-xl border-b border-white/10 flex items-center px-4 md:px-12 justify-between">
         
         {/* LOGO */}
         <div onClick={() => window.location.href = "/"} className="flex items-center gap-3 cursor-pointer shrink-0">
           <div className="w-10 h-10 flex items-center justify-center bg-blue-600/20 rounded-xl border border-blue-500/30">
             <Shield size={22} className="text-blue-500" />
           </div>
-          <span className="text-xl font-bold text-white tracking-tighter">
+          <span className="text-lg md:text-xl font-bold text-white tracking-tighter">
             Secure<span className="text-blue-500">Me</span>
           </span>
         </div>
 
-        {/* DESKTOP LINKS */}
-        <ul className="hidden md:flex items-center gap-10">
+        {/* 2️⃣ DESKTOP LINKS - Hidden on small screens (hidden md:flex) */}
+        <ul className="hidden md:flex items-center gap-8 lg:gap-10">
           {navLinks.map((link) => (
             <li key={link.name} className="relative h-20 flex items-center">
               <a
@@ -105,45 +100,87 @@ export default function Navbar() {
           ))}
         </ul>
 
-        {/* AUTH BUTTONS */}
-        <div className="flex items-center gap-4">
+        {/* 3️⃣ RIGHT SIDE ACTIONS */}
+        <div className="flex items-center gap-2 md:gap-4">
+          {!isLoggedIn ? (
+            <>
+              <button 
+                onClick={() => window.location.href = "/login"}
+                className="hidden sm:block text-[11px] font-black uppercase tracking-widest text-zinc-400 hover:text-white transition-colors px-3"
+              >
+                Login
+              </button>
+              <button 
+                onClick={() => window.location.href = "/signup"}
+                className="px-5 py-2 md:px-6 md:py-2.5 bg-blue-600 text-white text-[10px] md:text-[11px] font-black uppercase tracking-widest rounded-full hover:bg-blue-500 transition-all shadow-[0_5px_15px_rgba(59,130,246,0.3)]"
+              >
+                Join
+              </button>
+            </>
+          ) : (
+            <button 
+              onClick={() => window.location.href = "/dashboard"}
+              className="px-5 py-2 bg-zinc-800 text-white text-[10px] font-black uppercase rounded-full"
+            >
+              Dashboard
+            </button>
+          )}
+
+          {/* 4️⃣ HAMBURGER ICON - Visible only on small screens (md:hidden) */}
           <button 
-            onClick={() => window.location.href = "/login"}
-            className="hidden md:block text-[11px] font-black uppercase tracking-widest text-zinc-400 hover:text-white transition-colors"
+            className="md:hidden p-2 text-zinc-400 hover:text-white transition-colors" 
+            onClick={() => setIsMobileMenuOpen(true)}
           >
-            Login
-          </button>
-          <button 
-            onClick={() => window.location.href = "/signup"}
-            className="px-6 py-2.5 bg-blue-600 text-white text-[11px] font-black uppercase tracking-widest rounded-full hover:bg-blue-500 transition-all shadow-[0_5px_15px_rgba(59,130,246,0.3)]"
-          >
-            Join
-          </button>
-          <button className="md:hidden text-white" onClick={() => setIsMobileMenuOpen(true)}>
-            <Menu size={24} />
+            <Menu size={28} />
           </button>
         </div>
       </nav>
 
-      {/* MOBILE MENU */}
+      {/* 5️⃣ MOBILE MENU OVERLAY */}
       <AnimatePresence>
         {isMobileMenuOpen && (
           <motion.div 
-            initial={{ opacity: 0, x: 20 }}
+            initial={{ opacity: 0, x: "100%" }}
             animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 20 }}
-            className="fixed inset-0 bg-black z-[1000] p-8 flex flex-col"
+            exit={{ opacity: 0, x: "100%" }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            className="fixed inset-0 bg-black z-[1000] p-6 flex flex-col"
           >
-             <button onClick={() => setIsMobileMenuOpen(false)} className="self-end text-white p-2">
-               <X size={32} />
-             </button>
-             <div className="flex flex-col gap-6 mt-12 text-4xl font-black uppercase italic">
-                {navLinks.map(link => (
-                  <a key={link.name} href={link.href} onClick={(e) => handleScroll(e, link.href)} className={activeTab === link.name ? "text-blue-500" : "text-zinc-800"}>
-                    {link.name}
-                  </a>
-                ))}
-             </div>
+            {/* CLOSE BUTTON */}
+            <div className="flex justify-end">
+              <button onClick={() => setIsMobileMenuOpen(false)} className="text-white p-2">
+                <X size={32} />
+              </button>
+            </div>
+
+            {/* MOBILE NAV LINKS */}
+            <div className="flex flex-col gap-8 mt-12">
+              {navLinks.map((link, index) => (
+                <motion.a 
+                  key={link.name} 
+                  href={link.href} 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  onClick={(e) => handleScroll(e, link.href)} 
+                  className={`text-4xl font-black uppercase tracking-tighter italic ${
+                    activeTab === link.name ? "text-blue-500" : "text-zinc-800 hover:text-zinc-600"
+                  }`}
+                >
+                  {link.name}
+                </motion.a>
+              ))}
+            </div>
+
+            {/* MOBILE FOOTER AUTH */}
+            <div className="mt-auto pb-10 flex flex-col gap-4">
+              <button 
+                onClick={() => window.location.href = "/login"}
+                className="w-full py-4 border border-white/10 text-white font-black uppercase tracking-widest rounded-xl"
+              >
+                Login
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
