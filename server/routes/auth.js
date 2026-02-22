@@ -24,10 +24,7 @@ const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
   port: 465,
   secure: true,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS, // Gmail App Password
-  },
+  auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
 });
 
 transporter.verify((err, success) => {
@@ -36,20 +33,33 @@ transporter.verify((err, success) => {
 });
 
 const sendVerificationEmail = async (email, code) => {
-  await transporter.sendMail({
-    from: `"Shield Security" <${process.env.EMAIL_USER}>`,
-    to: email,
-    subject: "Your Verification Code",
-    html: `<h2>Verification Required</h2><p>Your secure access code:</p><h1>${code}</h1><p>Expires in 10 minutes</p>`,
-  });
+  try {
+    await transporter.sendMail({
+      from: `"Shield Security" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: "Your Verification Code",
+      html: `<h2>Verification Required</h2>
+             <p>Your secure access code:</p>
+             <h1>${code}</h1>
+             <p>Expires in 10 minutes</p>`,
+    });
+  } catch (err) {
+    console.error("EMAIL SEND ERROR:", err);
+    throw new Error("Failed to send verification email");
+  }
 };
 
 /* ================= PRICE HELPER ================= */
 const getPriceInCents = (tier) => ({ Premium: 900, Business: 4900, Lab: 2500 }[tier] || null);
 
+/* ================= PLAN NORMALIZER ================= */
+const normalizePlan = (plan) => plan?.charAt(0).toUpperCase() + plan?.slice(1).toLowerCase();
+
 /* ================= CREATE PAYMENT ================= */
 router.post("/create-payment-intent", async (req, res) => {
-  const { planTier, email } = req.body;
+  const planTier = normalizePlan(req.body.planTier);
+  const email = req.body.email;
+
   const amount = getPriceInCents(planTier);
   if (!amount) return res.status(400).json({ message: "Invalid plan" });
 
@@ -62,14 +72,15 @@ router.post("/create-payment-intent", async (req, res) => {
     });
     res.json({ clientSecret: intent.client_secret });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Payment failed" });
+    console.error("PAYMENT ERROR:", err);
+    res.status(500).json({ message: "Payment failed", error: err.message });
   }
 });
 
 /* ================= SIGNUP ================= */
 router.post("/signup", async (req, res) => {
   const { name, email, password, planTier } = req.body;
+  const plan = normalizePlan(planTier);
 
   if (!name || !email || !password)
     return res.status(400).json({ message: "All fields required" });
@@ -80,19 +91,26 @@ router.post("/signup", async (req, res) => {
 
     const hash = await bcrypt.hash(password, 10);
 
+    const isRestricted = ["Business", "Lab"].includes(plan);
+
     const user = new User({
       full_name: name,
       email,
       password_hash: hash,
-      plan_tier: planTier || "Free",
-      verified: !["Business", "Lab"].includes(planTier),
+      plan_tier: plan || "Free",
+      verified: !isRestricted,
     });
 
-    if (["Business", "Lab"].includes(planTier)) {
+    if (isRestricted) {
       const code = crypto.randomBytes(3).toString("hex").toUpperCase();
       user.verification_code = code;
       user.verification_expires = new Date(Date.now() + 10 * 60 * 1000);
-      await sendVerificationEmail(email, code);
+
+      try {
+        await sendVerificationEmail(email, code);
+      } catch (err) {
+        console.error("SEND CODE ERROR:", err);
+      }
     }
 
     await user.save();
@@ -101,12 +119,10 @@ router.post("/signup", async (req, res) => {
     delete userData.password_hash;
     delete userData.verification_code;
 
-    const redirectTo = ["Business", "Lab"].includes(planTier) ? "verify" : "dashboard";
-
-    res.status(201).json({ user: userData, redirectTo });
+    res.status(201).json({ user: userData, redirectTo: isRestricted ? "verify" : "dashboard" });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Signup failed" });
+    console.error("SIGNUP ERROR:", err);
+    res.status(500).json({ message: "Signup failed", error: err.message });
   }
 });
 
@@ -128,17 +144,18 @@ router.post("/login", async (req, res) => {
 
     res.json({ user: userData, redirectTo: "dashboard" });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Login failed" });
+    console.error("LOGIN ERROR:", err);
+    res.status(500).json({ message: "Login failed", error: err.message });
   }
 });
 
-/* ================= SEND CODE (NEW) ================= */
+/* ================= SEND CODE ================= */
 router.post("/send-code", async (req, res) => {
-  const { email } = req.body;
+  const email = req.body.email;
+  console.log("SEND CODE REQ:", email);
 
   try {
-    let user = await User.findOne({ email });
+    const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ message: "User not found" });
 
     const code = crypto.randomBytes(3).toString("hex").toUpperCase();
@@ -150,8 +167,8 @@ router.post("/send-code", async (req, res) => {
 
     res.json({ success: true, message: "Code sent" });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to send code" });
+    console.error("SEND CODE ERROR:", err);
+    res.status(500).json({ message: "Failed to send code", error: err.message });
   }
 });
 
@@ -170,7 +187,6 @@ router.post("/verify-code", async (req, res) => {
     user.verified = true;
     user.verification_code = null;
     user.verification_expires = null;
-
     await user.save();
 
     const userData = user.toObject();
@@ -178,14 +194,15 @@ router.post("/verify-code", async (req, res) => {
 
     res.json({ success: true, user: userData, redirectTo: "dashboard" });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Verification failed" });
+    console.error("VERIFY CODE ERROR:", err);
+    res.status(500).json({ message: "Verification failed", error: err.message });
   }
 });
 
 /* ================= GOOGLE LOGIN ================= */
 router.post("/google-login", async (req, res) => {
   const { token, planTier } = req.body;
+  const plan = normalizePlan(planTier);
 
   try {
     const ticket = await googleClient.verifyIdToken({
@@ -202,12 +219,12 @@ router.post("/google-login", async (req, res) => {
     const userData = user.toObject();
     delete userData.password_hash;
 
-    const needsPayment = planTier && planTier !== "Free" && user.plan_tier === "Free";
+    const needsPayment = plan && plan !== "Free" && user.plan_tier === "Free";
 
     res.json({ user: { ...userData, avatar: picture }, redirectTo: needsPayment ? "payment" : "dashboard" });
   } catch (err) {
-    console.error(err);
-    res.status(401).json({ message: "Google auth failed" });
+    console.error("GOOGLE LOGIN ERROR:", err);
+    res.status(401).json({ message: "Google auth failed", error: err.message });
   }
 });
 
@@ -230,8 +247,8 @@ router.post("/verify-payment", async (req, res) => {
 
     res.json({ success: true, user: userData });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Payment verification failed" });
+    console.error("VERIFY PAYMENT ERROR:", err);
+    res.status(500).json({ message: "Payment verification failed", error: err.message });
   }
 });
 
