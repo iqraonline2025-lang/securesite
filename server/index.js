@@ -16,7 +16,7 @@ import { connectDB } from "./config/db.js";
 const app = express();
 
 // -------------------------
-// 1️⃣ CORS Setup (fixed for Express 5)
+// 1️⃣ CORS Setup (Express 5 safe)
 // -------------------------
 const allowedOrigins = [
   "http://localhost:3000",
@@ -26,12 +26,12 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
+    if (!origin) return callback(null, true); // server-to-server requests
     if (allowedOrigins.includes(origin)) return callback(null, true);
     callback(new Error("CORS blocked"));
   },
   credentials: true,
-  optionsSuccessStatus: 200 // lets preflight requests succeed
+  optionsSuccessStatus: 200 // safely handle preflight
 }));
 
 // -------------------------
@@ -47,7 +47,7 @@ const __dirname = path.resolve();
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // -------------------------
-// 4️⃣ Routes
+// 4️⃣ API Routes
 // -------------------------
 app.use("/api", authRoutes);
 app.use("/api/dashboard", dashboardRoutes);
@@ -56,7 +56,7 @@ app.use("/api/assets", assetRoutes);
 app.use("/api/reports", reportRoutes);
 
 // -------------------------
-// 5️⃣ Test Route (MongoDB)
+// 5️⃣ Test MongoDB Route
 // -------------------------
 app.get("/test-db", async (req, res) => {
   try {
@@ -74,6 +74,8 @@ app.get("/test-db", async (req, res) => {
 const clientBuildPath = path.join(__dirname, "client/build");
 if (fs.existsSync(clientBuildPath)) {
   app.use(express.static(clientBuildPath));
+  
+  // Only this wildcard for React frontend
   app.get("/*", (req, res) => {
     res.sendFile(path.join(clientBuildPath, "index.html"));
   });
