@@ -21,7 +21,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2024-06-
 
 /* ================= EMAIL ================= */
 const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
+  host: "smtp.gmail.com", // or SendGrid for production
   port: 465,
   secure: true,
   auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
@@ -32,6 +32,7 @@ transporter.verify((err, success) => {
   else console.log("SMTP READY ✅");
 });
 
+// Safe email sending function
 const sendVerificationEmail = async (email, code) => {
   try {
     await transporter.sendMail({
@@ -43,16 +44,16 @@ const sendVerificationEmail = async (email, code) => {
              <h1>${code}</h1>
              <p>Expires in 10 minutes</p>`,
     });
+    console.log(`✅ Verification code sent to ${email}`);
+    return true;
   } catch (err) {
-    console.error("EMAIL SEND ERROR:", err);
-    throw new Error("Failed to send verification email");
+    console.error("EMAIL SEND ERROR:", err.message);
+    return false; // do not throw, route continues safely
   }
 };
 
-/* ================= PRICE HELPER ================= */
+/* ================= HELPERS ================= */
 const getPriceInCents = (tier) => ({ Premium: 900, Business: 4900, Lab: 2500 }[tier] || null);
-
-/* ================= PLAN NORMALIZER ================= */
 const normalizePlan = (plan) => plan?.charAt(0).toUpperCase() + plan?.slice(1).toLowerCase();
 
 /* ================= CREATE PAYMENT ================= */
@@ -72,7 +73,7 @@ router.post("/create-payment-intent", async (req, res) => {
     });
     res.json({ clientSecret: intent.client_secret });
   } catch (err) {
-    console.error("PAYMENT ERROR:", err);
+    console.error("PAYMENT ERROR:", err.message);
     res.status(500).json({ message: "Payment failed", error: err.message });
   }
 });
@@ -90,7 +91,6 @@ router.post("/signup", async (req, res) => {
     if (existing) return res.status(400).json({ message: "User exists" });
 
     const hash = await bcrypt.hash(password, 10);
-
     const isRestricted = ["Business", "Lab"].includes(plan);
 
     const user = new User({
@@ -106,11 +106,7 @@ router.post("/signup", async (req, res) => {
       user.verification_code = code;
       user.verification_expires = new Date(Date.now() + 10 * 60 * 1000);
 
-      try {
-        await sendVerificationEmail(email, code);
-      } catch (err) {
-        console.error("SEND CODE ERROR:", err);
-      }
+      await sendVerificationEmail(email, code); // safe
     }
 
     await user.save();
@@ -121,7 +117,7 @@ router.post("/signup", async (req, res) => {
 
     res.status(201).json({ user: userData, redirectTo: isRestricted ? "verify" : "dashboard" });
   } catch (err) {
-    console.error("SIGNUP ERROR:", err);
+    console.error("SIGNUP ERROR:", err.message);
     res.status(500).json({ message: "Signup failed", error: err.message });
   }
 });
@@ -144,7 +140,7 @@ router.post("/login", async (req, res) => {
 
     res.json({ user: userData, redirectTo: "dashboard" });
   } catch (err) {
-    console.error("LOGIN ERROR:", err);
+    console.error("LOGIN ERROR:", err.message);
     res.status(500).json({ message: "Login failed", error: err.message });
   }
 });
@@ -152,7 +148,6 @@ router.post("/login", async (req, res) => {
 /* ================= SEND CODE ================= */
 router.post("/send-code", async (req, res) => {
   const email = req.body.email;
-  console.log("SEND CODE REQ:", email);
 
   try {
     const user = await User.findOne({ email });
@@ -163,11 +158,15 @@ router.post("/send-code", async (req, res) => {
     user.verification_expires = new Date(Date.now() + 10 * 60 * 1000);
 
     await user.save();
-    await sendVerificationEmail(email, code);
+
+    const emailSent = await sendVerificationEmail(email, code);
+    if (!emailSent) {
+      return res.status(200).json({ success: true, message: "Code generated but failed to send email" });
+    }
 
     res.json({ success: true, message: "Code sent" });
   } catch (err) {
-    console.error("SEND CODE ERROR:", err);
+    console.error("SEND CODE ERROR:", err.message);
     res.status(500).json({ message: "Failed to send code", error: err.message });
   }
 });
@@ -187,6 +186,7 @@ router.post("/verify-code", async (req, res) => {
     user.verified = true;
     user.verification_code = null;
     user.verification_expires = null;
+
     await user.save();
 
     const userData = user.toObject();
@@ -194,7 +194,7 @@ router.post("/verify-code", async (req, res) => {
 
     res.json({ success: true, user: userData, redirectTo: "dashboard" });
   } catch (err) {
-    console.error("VERIFY CODE ERROR:", err);
+    console.error("VERIFY CODE ERROR:", err.message);
     res.status(500).json({ message: "Verification failed", error: err.message });
   }
 });
@@ -223,7 +223,7 @@ router.post("/google-login", async (req, res) => {
 
     res.json({ user: { ...userData, avatar: picture }, redirectTo: needsPayment ? "payment" : "dashboard" });
   } catch (err) {
-    console.error("GOOGLE LOGIN ERROR:", err);
+    console.error("GOOGLE LOGIN ERROR:", err.message);
     res.status(401).json({ message: "Google auth failed", error: err.message });
   }
 });
@@ -247,7 +247,7 @@ router.post("/verify-payment", async (req, res) => {
 
     res.json({ success: true, user: userData });
   } catch (err) {
-    console.error("VERIFY PAYMENT ERROR:", err);
+    console.error("VERIFY PAYMENT ERROR:", err.message);
     res.status(500).json({ message: "Payment verification failed", error: err.message });
   }
 });
