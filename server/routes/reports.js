@@ -1,52 +1,59 @@
 import express from "express";
-import db from "../config/db.js";
 import multer from "multer";
 import path from "path";
+import UserReport from "../models/UserReport.js";
 
 const router = express.Router();
 
 // Configure storage for screenshots
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'uploads/'),
+  destination: (req, file, cb) => cb(null, "uploads/"),
   filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname))
 });
 
-const upload = multer({ storage: storage });
+const upload = multer({ storage });
 
 // POST: Submit a new scam for analysis
-router.post("/check", upload.single('screenshot'), async (req, res) => {
+router.post("/check", upload.single("screenshot"), async (req, res) => {
   try {
     const { email, phone, message } = req.body;
-    const screenshot_url = req.file ? `/uploads/${req.file.filename}` : null;
+    const screenshotUrl = req.file ? `/uploads/${req.file.filename}` : null;
 
     // Simulated AI Logic
-    const keywords = ['urgent', 'bank', 'password', 'winner', 'click', 'locked', 'verify'];
+    const keywords = ["urgent", "bank", "password", "winner", "click", "locked", "verify"];
     const isScam = keywords.some(word => message?.toLowerCase().includes(word));
-    const result = isScam ? 'Malicious' : 'Suspicious';
+    const result = isScam ? "Malicious" : "Suspicious";
 
-    await db.query(
-      "INSERT INTO user_reports (user_email, phone_number, scam_text, screenshot_url, analysis_result) VALUES (?, ?, ?, ?, ?)",
-      [email, phone, message, screenshot_url, result]
-    );
+    await UserReport.create({
+      userEmail: email,
+      analysis_result: result,
+      details: message,
+      screenshotUrl
+    });
 
-    res.json({ result, message: isScam ? "High-risk threat detected!" : "Analysis complete." });
+    res.json({
+      result,
+      message: isScam ? "High-risk threat detected!" : "Analysis complete."
+    });
+
   } catch (err) {
-    console.error(err);
+    console.error("Report Submission Error:", err);
     res.status(500).json({ error: "Analysis failed" });
   }
 });
 
-// NEW: GET History of reports for a specific user
+// GET: History of reports for a specific user
 router.get("/history/:email", async (req, res) => {
   try {
     const { email } = req.params;
-    const [rows] = await db.query(
-      "SELECT * FROM user_reports WHERE user_email = ? ORDER BY created_at DESC",
-      [email]
-    );
-    res.json(rows);
+    const reports = await UserReport.find({ userEmail: email })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.json(reports);
+
   } catch (err) {
-    console.error(err);
+    console.error("Report History Error:", err);
     res.status(500).json({ error: "Could not fetch report history" });
   }
 });

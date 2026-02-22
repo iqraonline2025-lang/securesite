@@ -1,25 +1,22 @@
 {
   "name": "server",
   "version": "1.0.0",
-  "description": "",
+  "description": "Backend server",
   "main": "index.js",
+  "type": "module",
   "scripts": {
     "dev": "nodemon index.js",
-    "start": "node index.js",
-    "build": "echo \"No build step needed\""
+    "start": "node index.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "module",
   "dependencies": {
     "bcrypt": "^6.0.0",
-    "cors": "^2.8.5",
-    "dotenv": "^17.2.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
     "express": "^5.2.1",
     "google-auth-library": "^10.5.0",
+    "mongoose": "^9.2.1",
     "multer": "^2.0.2",
-    "mysql2": "^3.16.0",
+    "nodemailer": "^8.0.1",
     "stripe": "^20.1.2"
   },
   "devDependencies": {

@@ -1,31 +1,34 @@
 import express from "express";
-import db from "../config/db.js";
+import TeamMember from "../models/TeamMember.js";
 
 const router = express.Router();
 
-// Get all team members for a business owner
+// GET: All team members for a business owner
 router.get("/:ownerId", async (req, res) => {
   try {
-    const [members] = await db.query(
-      "SELECT * FROM team_members WHERE owner_id = ?", 
-      [req.params.ownerId]
-    );
+    const { ownerId } = req.params;
+    const members = await TeamMember.find({ ownerId }).sort({ createdAt: -1 }).lean();
     res.json(members);
   } catch (err) {
+    console.error("Team Fetch Error:", err);
     res.status(500).json({ message: "Error fetching team" });
   }
 });
 
-// Add a new member
+// POST: Add a new team member
 router.post("/add", async (req, res) => {
-  const { ownerId, name, email } = req.body;
   try {
-    await db.query(
-      "INSERT INTO team_members (owner_id, member_name, member_email) VALUES (?, ?, ?)",
-      [ownerId, name, email]
-    );
-    res.json({ success: true });
+    const { ownerId, name, email } = req.body;
+
+    const newMember = await TeamMember.create({
+      ownerId,
+      memberName: name,
+      memberEmail: email
+    });
+
+    res.status(201).json({ success: true, member: newMember });
   } catch (err) {
+    console.error("Add Member Error:", err);
     res.status(500).json({ message: "Error adding member" });
   }
 });

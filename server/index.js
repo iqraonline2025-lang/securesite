@@ -1,36 +1,33 @@
+// index.js
+import "dotenv/config";   // ⭐ MUST be first (loads .env before anything else)
+
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 import path from "path";
+
 import authRoutes from "./routes/auth.js";
 import dashboardRoutes from "./routes/dashboard.js";
 import alertRoutes from "./routes/alerts.js";
 import assetRoutes from "./routes/assets.js";
 import reportRoutes from "./routes/reports.js";
 
-dotenv.config();
+import { connectDB } from "./config/db.js";
+
 const app = express();
 
 // -------------------------
 // 1️⃣ CORS Setup
 // -------------------------
-const allowedOrigins = [
-  "http://localhost:3000",
-  "https://securesite-2fow.vercel.app",
-  "https://securesite-tend.onrender.com",
-  "https://securesite-send.onrender.com"
-];
-
 app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl)
+  origin: (origin, callback) => {
     if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('The CORS policy for this site does not allow access from the specified Origin.'), false);
-    }
+
+    const allowed =
+      origin.includes("localhost") ||
+      origin.endsWith(".vercel.app") ||
+      origin.endsWith(".onrender.com");
+
+    allowed ? callback(null, true) : callback(new Error("CORS blocked"));
   },
   credentials: true
 }));
@@ -56,28 +53,49 @@ app.use("/api/alerts", alertRoutes);
 app.use("/api/assets", assetRoutes);
 app.use("/api/reports", reportRoutes);
 
-app.get("/", (req, res) => {
-  res.send("🚀 Shield Backend is Running...");
+// -------------------------
+// 5️⃣ Test Route (MongoDB)
+// -------------------------
+app.get("/test-db", async (req, res) => {
+  try {
+    const mongoose = await connectDB();
+    const serverStatus = await mongoose.connection.db.admin().serverStatus();
+    res.json({ mongoTime: serverStatus.localTime });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // -------------------------
-// 5️⃣ Error Handling
+// Root
+// -------------------------
+app.get("/", (req, res) => {
+  res.send("🚀 Shield Backend is Running with MongoDB!");
+});
+
+// -------------------------
+// 6️⃣ Error Handling
 // -------------------------
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({ message: "Internal Server Error", error: err.message });
+  res.status(500).json({
+    message: "Internal Server Error",
+    error: err.message
+  });
 });
 
 // -------------------------
-// 6️⃣ Environment Settings
+// 7️⃣ Environment Settings
 // -------------------------
 app.set("trust proxy", 1);
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`🚀 Shield Server running on port ${PORT}`);
+
+// -------------------------
+// 8️⃣ Connect DB → Start Server
+// -------------------------
+connectDB().then(() => {
+  app.listen(PORT, () => {
+    console.log(`🚀 Shield Server running on port ${PORT}`);
+  });
 });
-=======
-  console.log(`🚀 Shield Server running on http://localhost:${PORT}`);
-});
->>>>>>> d3fa03ea06916ccb0905d0d4a5a60cdaa8b2ff7a

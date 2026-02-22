@@ -1,5 +1,6 @@
+// routes/dashboard.js
 import express from "express";
-import db from "../config/db.js";
+import User from "../models/User.js";
 
 const router = express.Router();
 
@@ -8,36 +9,23 @@ router.get("/config/:email", async (req, res) => {
   try {
     const { email } = req.params;
 
-    // Search for the user in the database
-    let [users] = await db.query(
-      "SELECT id, full_name, plan_tier, total_alerts, risk_score FROM users WHERE email = ?", 
-      [email]
-    );
+    // Search for the user
+    let user = await User.findOne({ email });
 
-    // AUTO-CREATE: If the email is NOT in the database, add it as a new "Free" user
-    if (users.length === 0) {
-      await db.query(
-        "INSERT INTO users (full_name, email, plan_tier, total_alerts, risk_score) VALUES (?, ?, 'Free', 0, 85)",
-        ["New Operator", email] 
-      );
-
-      [users] = await db.query(
-        "SELECT id, full_name, plan_tier, total_alerts, risk_score FROM users WHERE email = ?", 
-        [email]
-      );
+    // AUTO-CREATE if not exists
+    if (!user) {
+      user = await User.create({ email });
     }
 
-    const user = users[0];
-    
-    // Normalize the Tier (Ensures 'free' becomes 'Free')
+    // Normalize Tier
     const rawTier = user.plan_tier || "Free";
     const tier = rawTier.charAt(0).toUpperCase() + rawTier.slice(1).toLowerCase();
 
-    // Build the response with REAL stats from SQL
+    // Build dashboard config
     const dashboardConfig = {
-      email: email, // Returned so frontend can use it for scans
+      email: user.email,
       name: user.full_name,
-      tier: tier, 
+      tier,
       permissions: {
         canAccessAdvancedDetection: ["Premium", "Business", "Lab"].includes(tier),
         canAccessAnalytics: ["Premium", "Business", "Lab"].includes(tier),
@@ -54,8 +42,8 @@ router.get("/config/:email", async (req, res) => {
         labTools: tier === "Lab"
       },
       stats: {
-        threatsBlocked: user.total_alerts || 0,
-        safetyScore: user.risk_score || 0,
+        threatsBlocked: user.total_alerts,
+        safetyScore: user.risk_score,
         scamAlerts: "Active",
         uptime: "99.9%",
         threatLevel: (user.risk_score < 50) ? "High" : "Low"
@@ -75,21 +63,22 @@ router.post("/scan/:email", async (req, res) => {
   const { email } = req.params;
 
   try {
-    // Generate some "simulated" scan results
-    const newThreatsFound = Math.floor(Math.random() * 4) + 1; // 1-4 new threats
-    const scoreBoost = 2; // Improve safety score by 2% per scan
+    // Simulate scan results
+    const newThreatsFound = Math.floor(Math.random() * 4) + 1; // 1-4
+    const scoreBoost = 2;
 
-    // Update the database
-    // total_alerts increases, risk_score increases (maxes at 100)
-    const [result] = await db.query(
-      `UPDATE users 
-       SET total_alerts = total_alerts + ?, 
-           risk_score = LEAST(risk_score + ?, 100) 
-       WHERE email = ?`,
-      [newThreatsFound, scoreBoost, email]
+    // Update user document
+    const user = await User.findOneAndUpdate(
+      { email },
+      {
+        $inc: { total_alerts: newThreatsFound },
+        $min: { risk_score: 100 }, // ensure risk_score <= 100
+        $set: { risk_score: Math.min(100, (await User.findOne({ email })).risk_score + scoreBoost) }
+      },
+      { new: true }
     );
 
-    if (result.affectedRows === 0) {
+    if (!user) {
       return res.status(404).json({ message: "Operator not found in registry." });
     }
 

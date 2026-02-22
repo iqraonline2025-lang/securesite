@@ -1,20 +1,42 @@
-import mysql from "mysql2/promise";
-import dotenv from "dotenv";
+// server/config/db.js
+import mongoose from "mongoose";
 
-dotenv.config();
+/* ==============================
+   🚀 MongoDB Connection
+============================== */
+export const connectDB = async () => {
+  try {
+    if (!process.env.MONGO_URI) {
+      throw new Error("❌ MONGO_URI missing in .env");
+    }
 
-const db = mysql.createPool({
-  host: process.env.DB_HOST,
-  port: Number(process.env.DB_PORT), // This must be a Number for Railway
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-  ssl: {
-    rejectUnauthorized: false, // Required for Railway cloud connections
-  },
-});
+    const conn = await mongoose.connect(process.env.MONGO_URI, {
+      serverSelectionTimeoutMS: 10000, // fail fast if DB unreachable
+      socketTimeoutMS: 45000
+    });
 
-export default db;
+    console.log(`✅ MongoDB connected: ${conn.connection.host}`);
+
+    /* ==============================
+       📡 Connection Events (optional but useful)
+    ============================== */
+
+    mongoose.connection.on("disconnected", () => {
+      console.warn("⚠️ MongoDB disconnected");
+    });
+
+    mongoose.connection.on("reconnected", () => {
+      console.log("🔄 MongoDB reconnected");
+    });
+
+    mongoose.connection.on("error", (err) => {
+      console.error("❌ MongoDB error:", err.message);
+    });
+
+    return mongoose; // used by /test-db route
+
+  } catch (err) {
+    console.error("❌ MongoDB connection failed:", err.message);
+    process.exit(1);
+  }
+};

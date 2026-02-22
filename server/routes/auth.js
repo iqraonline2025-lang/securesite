@@ -1,146 +1,237 @@
+// routes/auth.js
 import express from "express";
 import bcrypt from "bcrypt";
-import db from "../config/db.js";
 import { OAuth2Client } from "google-auth-library";
 import Stripe from "stripe";
+import crypto from "crypto";
+import nodemailer from "nodemailer";
+import User from "../models/User.js";
 
 const router = express.Router();
-const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-// Helper to convert plan names to cents
-const getPriceInCents = (tier) => {
-  const prices = { Premium: 900, Business: 4900, Lab: 2500 };
-  return prices[tier] || null;
+/* ================= ENV CHECK ================= */
+if (!process.env.STRIPE_SECRET_KEY) throw new Error("STRIPE_SECRET_KEY missing");
+if (!process.env.GOOGLE_CLIENT_ID) throw new Error("GOOGLE_CLIENT_ID missing");
+if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS)
+  throw new Error("Email credentials missing");
+
+/* ================= SERVICES ================= */
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2024-06-20" });
+
+/* ================= EMAIL ================= */
+const transporter = nodemailer.createTransport({
+  host: "smtp.gmail.com",
+  port: 465,
+  secure: true,
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS, // Gmail App Password
+  },
+});
+
+transporter.verify((err, success) => {
+  if (err) console.error("SMTP ERROR:", err);
+  else console.log("SMTP READY ✅");
+});
+
+const sendVerificationEmail = async (email, code) => {
+  await transporter.sendMail({
+    from: `"Shield Security" <${process.env.EMAIL_USER}>`,
+    to: email,
+    subject: "Your Verification Code",
+    html: `<h2>Verification Required</h2><p>Your secure access code:</p><h1>${code}</h1><p>Expires in 10 minutes</p>`,
+  });
 };
 
-// 1️⃣ CREATE PAYMENT INTENT
+/* ================= PRICE HELPER ================= */
+const getPriceInCents = (tier) => ({ Premium: 900, Business: 4900, Lab: 2500 }[tier] || null);
+
+/* ================= CREATE PAYMENT ================= */
 router.post("/create-payment-intent", async (req, res) => {
   const { planTier, email } = req.body;
   const amount = getPriceInCents(planTier);
-
-  if (!amount) return res.status(400).json({ message: "Invalid plan tier" });
+  if (!amount) return res.status(400).json({ message: "Invalid plan" });
 
   try {
-    const paymentIntent = await stripe.paymentIntents.create({
+    const intent = await stripe.paymentIntents.create({
       amount,
       currency: "usd",
       metadata: { user_email: email, planTier },
       automatic_payment_methods: { enabled: true },
     });
-    res.status(200).json({ clientSecret: paymentIntent.client_secret });
+    res.json({ clientSecret: intent.client_secret });
   } catch (err) {
-    res.status(500).json({ message: "Stripe Error: " + err.message });
+    console.error(err);
+    res.status(500).json({ message: "Payment failed" });
   }
 });
 
-// 2️⃣ SIGNUP (Initial user creation)
+/* ================= SIGNUP ================= */
 router.post("/signup", async (req, res) => {
   const { name, email, password, planTier } = req.body;
+
+  if (!name || !email || !password)
+    return res.status(400).json({ message: "All fields required" });
+
   try {
-    const [existing] = await db.query("SELECT * FROM users WHERE email = ?", [email]);
-    if (existing.length > 0) return res.status(400).json({ message: "User already exists" });
+    const existing = await User.findOne({ email });
+    if (existing) return res.status(400).json({ message: "User exists" });
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-    
-    // We default to 'Free' initially. If they chose a paid plan, 
-    // the frontend will detect the mismatch and trigger payment.
-    await db.query(
-      "INSERT INTO users (full_name, email, password_hash, plan_tier) VALUES (?, ?, ?, 'Free')",
-      [name, email, hashedPassword]
-    );
+    const hash = await bcrypt.hash(password, 10);
 
-    const [user] = await db.query("SELECT id, full_name, email, plan_tier FROM users WHERE email = ?", [email]);
-    
-    res.status(201).json({ 
-      user: user[0],
-      redirectTo: planTier !== "Free" ? "payment" : "dashboard" 
+    const user = new User({
+      full_name: name,
+      email,
+      password_hash: hash,
+      plan_tier: planTier || "Free",
+      verified: !["Business", "Lab"].includes(planTier),
     });
+
+    if (["Business", "Lab"].includes(planTier)) {
+      const code = crypto.randomBytes(3).toString("hex").toUpperCase();
+      user.verification_code = code;
+      user.verification_expires = new Date(Date.now() + 10 * 60 * 1000);
+      await sendVerificationEmail(email, code);
+    }
+
+    await user.save();
+
+    const userData = user.toObject();
+    delete userData.password_hash;
+    delete userData.verification_code;
+
+    const redirectTo = ["Business", "Lab"].includes(planTier) ? "verify" : "dashboard";
+
+    res.status(201).json({ user: userData, redirectTo });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ message: "Signup failed" });
   }
 });
 
-// 3️⃣ MANUAL LOGIN (Added)
+/* ================= LOGIN ================= */
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
-  try {
-    const [users] = await db.query("SELECT * FROM users WHERE email = ?", [email]);
-    const user = users[0];
 
+  try {
+    const user = await User.findOne({ email });
     if (!user) return res.status(401).json({ message: "Invalid credentials" });
 
-    const isMatch = await bcrypt.compare(password, user.password_hash);
-    if (!isMatch) return res.status(401).json({ message: "Invalid credentials" });
+    const valid = await bcrypt.compare(password, user.password_hash || "");
+    if (!valid) return res.status(401).json({ message: "Invalid credentials" });
 
-    const { password_hash, ...userData } = user;
-    
-    // Logic: If they are on a Free tier but previously tried to sign up for Premium,
-    // you could check a 'pending_tier' column here. For now, we assume simple login.
-    res.status(200).json({ 
-      user: userData,
-      redirectTo: "dashboard"
-    });
+    if (!user.verified) return res.status(403).json({ message: "User not verified" });
+
+    const userData = user.toObject();
+    delete userData.password_hash;
+
+    res.json({ user: userData, redirectTo: "dashboard" });
   } catch (err) {
-    res.status(500).json({ message: "Server error during login" });
+    console.error(err);
+    res.status(500).json({ message: "Login failed" });
   }
 });
 
-// 4️⃣ GOOGLE LOGIN (Updated with redirect logic)
+/* ================= SEND CODE (NEW) ================= */
+router.post("/send-code", async (req, res) => {
+  const { email } = req.body;
+
+  try {
+    let user = await User.findOne({ email });
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const code = crypto.randomBytes(3).toString("hex").toUpperCase();
+    user.verification_code = code;
+    user.verification_expires = new Date(Date.now() + 10 * 60 * 1000);
+
+    await user.save();
+    await sendVerificationEmail(email, code);
+
+    res.json({ success: true, message: "Code sent" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to send code" });
+  }
+});
+
+/* ================= VERIFY CODE ================= */
+router.post("/verify-code", async (req, res) => {
+  const { email, code } = req.body;
+
+  try {
+    const user = await User.findOne({ email });
+    if (!user || user.verification_code !== code)
+      return res.status(400).json({ message: "Invalid code" });
+
+    if (user.verification_expires < new Date())
+      return res.status(400).json({ message: "Code expired" });
+
+    user.verified = true;
+    user.verification_code = null;
+    user.verification_expires = null;
+
+    await user.save();
+
+    const userData = user.toObject();
+    delete userData.password_hash;
+
+    res.json({ success: true, user: userData, redirectTo: "dashboard" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Verification failed" });
+  }
+});
+
+/* ================= GOOGLE LOGIN ================= */
 router.post("/google-login", async (req, res) => {
-  const { token, planTier } = req.body; // planTier comes from frontend selection
+  const { token, planTier } = req.body;
+
   try {
     const ticket = await googleClient.verifyIdToken({
       idToken: token,
       audience: process.env.GOOGLE_CLIENT_ID,
     });
+
     const { email, name, picture } = ticket.getPayload();
 
-    let [users] = await db.query("SELECT * FROM users WHERE email = ?", [email]);
-    let user = users[0];
+    let user = await User.findOne({ email });
+    if (!user)
+      user = await User.create({ full_name: name, email, plan_tier: "Free", verified: true });
 
-    if (!user) {
-      const [result] = await db.query(
-        "INSERT INTO users (full_name, email, plan_tier) VALUES (?, ?, 'Free')",
-        [name, email]
-      );
-      const [newUser] = await db.query("SELECT * FROM users WHERE id = ?", [result.insertId]);
-      user = newUser[0];
-    }
+    const userData = user.toObject();
+    delete userData.password_hash;
 
-    const { password_hash, ...userData } = user;
-
-    // Check if they need to pay: If they selected a paid plan but the DB says 'Free'
     const needsPayment = planTier && planTier !== "Free" && user.plan_tier === "Free";
 
-    res.status(200).json({ 
-      user: { ...userData, avatar: picture },
-      redirectTo: needsPayment ? "payment" : "dashboard"
-    });
+    res.json({ user: { ...userData, avatar: picture }, redirectTo: needsPayment ? "payment" : "dashboard" });
   } catch (err) {
     console.error(err);
-    res.status(401).json({ message: "Google Auth failed" });
+    res.status(401).json({ message: "Google auth failed" });
   }
 });
 
-// 5️⃣ VERIFY PAYMENT & UPGRADE
+/* ================= VERIFY PAYMENT ================= */
 router.post("/verify-payment", async (req, res) => {
   const { paymentIntentId } = req.body;
+
   try {
     const intent = await stripe.paymentIntents.retrieve(paymentIntentId);
-    if (intent.status === "succeeded") {
-      const email = intent.metadata.user_email;
-      const plan = intent.metadata.planTier;
-      
-      await db.query("UPDATE users SET plan_tier = ? WHERE email = ?", [plan, email]);
-      const [updated] = await db.query("SELECT id, full_name, email, plan_tier FROM users WHERE email = ?", [email]);
-      
-      res.status(200).json({ success: true, user: updated[0] });
-    } else {
-      res.status(400).json({ message: "Payment not verified" });
-    }
+    if (intent.status !== "succeeded")
+      return res.status(400).json({ message: "Payment not completed" });
+
+    const email = intent.metadata.user_email;
+    const plan = intent.metadata.planTier;
+
+    const user = await User.findOneAndUpdate({ email }, { plan_tier: plan }, { new: true });
+
+    const userData = user.toObject();
+    delete userData.password_hash;
+
+    res.json({ success: true, user: userData });
   } catch (err) {
-    res.status(500).json({ message: "Internal server error" });
+    console.error(err);
+    res.status(500).json({ message: "Payment verification failed" });
   }
 });
 

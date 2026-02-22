@@ -1,13 +1,18 @@
+// routes/admin.js
 import express from "express";
-import db from "../config/db.js";
+import User from "../models/User.js";
+import UserReport from "../models/UserReport.js";
 
 const router = express.Router();
 
 router.get("/stats", async (req, res) => {
   try {
-    const [users] = await db.query("SELECT id, full_name, email, plan_tier, created_at FROM users");
-    const [reports] = await db.query("SELECT * FROM user_reports ORDER BY created_at DESC");
-    
+    // Fetch all users
+    const users = await User.find({}, "full_name email plan_tier createdAt").lean();
+
+    // Fetch all reports, sorted by createdAt descending
+    const reports = await UserReport.find({}).sort({ createdAt: -1 }).lean();
+
     // Calculate simple stats
     const stats = {
       totalUsers: users.length,
@@ -17,6 +22,7 @@ router.get("/stats", async (req, res) => {
 
     res.json({ users, reports, stats });
   } catch (err) {
+    console.error("Admin data fetch failed:", err);
     res.status(500).json({ error: "Admin data fetch failed" });
   }
 });

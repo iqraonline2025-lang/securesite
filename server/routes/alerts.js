@@ -1,5 +1,6 @@
+// routes/alerts.js
 import express from "express";
-import db from "../config/db.js";
+import ScamAlert from "../models/ScamAlert.js";
 
 const router = express.Router();
 
@@ -8,10 +9,9 @@ router.get("/:email", async (req, res) => {
   try {
     const { email } = req.params;
 
-    const [alerts] = await db.query(
-      "SELECT * FROM scam_alerts WHERE user_email = ? ORDER BY created_at DESC", 
-      [email]
-    );
+    const alerts = await ScamAlert.find({ userEmail: email })
+      .sort({ createdAt: -1 }) // newest first
+      .lean();
 
     res.status(200).json(alerts);
   } catch (err) {
