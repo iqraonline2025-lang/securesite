@@ -1,6 +1,5 @@
 // index.js
-import "dotenv/config";   // ⭐ MUST be first (loads .env before anything else)
-
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import path from "path";
@@ -35,8 +34,8 @@ app.use(cors({
   credentials: true
 }));
 
-// Preflight requests
-app.options("*", cors({
+// ✅ Preflight requests for all routes (Express 5 fix: use /* instead of *)
+app.options("/*", cors({
   origin: allowedOrigins,
   methods: ["GET","POST","PUT","DELETE","OPTIONS"],
   credentials: true
@@ -82,8 +81,7 @@ app.get("/test-db", async (req, res) => {
 const clientBuildPath = path.join(__dirname, "client/build");
 if (fs.existsSync(clientBuildPath)) {
   app.use(express.static(clientBuildPath));
-
-  app.get("/*", (req, res) => { // ✅ catch-all route for React
+  app.get("/*", (req, res) => { // ✅ use /*, not *
     res.sendFile(path.join(clientBuildPath, "index.html"));
   });
 }
@@ -110,7 +108,6 @@ app.use((err, req, res, next) => {
 // 9️⃣ Environment Settings
 // -------------------------
 app.set("trust proxy", 1);
-
 const PORT = process.env.PORT || 5000;
 
 // -------------------------
