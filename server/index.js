@@ -26,7 +26,7 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
+    if (!origin) return callback(null, true); // Postman or server requests
     if (allowedOrigins.includes(origin)) return callback(null, true);
     callback(new Error("CORS blocked"));
   },
@@ -35,11 +35,15 @@ app.use(cors({
 }));
 
 // -------------------------
-// 2️⃣ COOP / COEP headers for Google login / postMessage
+// 2️⃣ COOP / COEP headers
+// Only apply for trusted frontend origins
 // -------------------------
 app.use((req, res, next) => {
-  res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
-  res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+    res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
+  }
   next();
 });
 
@@ -84,7 +88,7 @@ const clientBuildPath = path.join(__dirname, "client/build");
 if (fs.existsSync(clientBuildPath)) {
   app.use(express.static(clientBuildPath));
 
-  // Important: catch-all route for React SPA
+  // Catch-all route for SPA
   app.get("*", (req, res) => {
     res.sendFile(path.join(clientBuildPath, "index.html"));
   });
@@ -118,4 +122,6 @@ connectDB().then(() => {
   app.listen(PORT, () => {
     console.log(`🚀 Shield Server running on port ${PORT}`);
   });
+}).catch(err => {
+  console.error("MongoDB connection failed:", err);
 });
