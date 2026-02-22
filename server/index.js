@@ -4,6 +4,7 @@ import "dotenv/config";   // ⭐ MUST be first (loads .env before anything else)
 import express from "express";
 import cors from "cors";
 import path from "path";
+import fs from "fs";
 
 import authRoutes from "./routes/auth.js";
 import dashboardRoutes from "./routes/dashboard.js";
@@ -19,9 +20,9 @@ const app = express();
 // 1️⃣ CORS Setup
 // -------------------------
 const allowedOrigins = [
-  "http://localhost:3000",                     // Local dev
-  "https://securesite-omega.vercel.app",      // Vercel frontend
-  "https://securesite-5.onrender.com"         // Backend domain
+  "http://localhost:3000",
+  "https://securesite-omega.vercel.app",
+  "https://securesite-5.onrender.com"
 ];
 
 app.use(cors({
@@ -30,11 +31,11 @@ app.use(cors({
     if (allowedOrigins.includes(origin)) return callback(null, true);
     callback(new Error("CORS blocked"));
   },
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  methods: ["GET","POST","PUT","DELETE","OPTIONS"],
   credentials: true
 }));
 
-// Handle preflight OPTIONS requests
+// Preflight requests
 app.options("*", cors({
   origin: allowedOrigins,
   methods: ["GET","POST","PUT","DELETE","OPTIONS"],
@@ -79,11 +80,13 @@ app.get("/test-db", async (req, res) => {
 // 6️⃣ Serve React Frontend (Express 5 fixed)
 // -------------------------
 const clientBuildPath = path.join(__dirname, "client/build");
-app.use(express.static(clientBuildPath));
+if (fs.existsSync(clientBuildPath)) {
+  app.use(express.static(clientBuildPath));
 
-app.get("/*", (req, res) => {
-  res.sendFile(path.join(clientBuildPath, "index.html"));
-});
+  app.get("/*", (req, res) => { // ✅ catch-all route for React
+    res.sendFile(path.join(clientBuildPath, "index.html"));
+  });
+}
 
 // -------------------------
 // 7️⃣ Root
