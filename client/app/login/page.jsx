@@ -21,31 +21,26 @@ function LoginContent() {
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
     try {
-      // We use the environment variable for the URL
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-      
-      const response = await fetch(`${apiUrl}/api/login`, {
+      const response = await fetch(`${API_URL}/api/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include", // include cookies if any
         body: JSON.stringify(formData),
       });
 
       const data = await response.json();
-
-      if (!response.ok) {
-        // This will show exactly what the backend is complaining about
-        throw new Error(data.message || "Invalid Email or Password");
-      }
+      if (!response.ok) throw new Error(data.message || "Invalid credentials");
 
       localStorage.setItem("user", JSON.stringify(data.user));
       router.push("/dashboard");
-      
     } catch (err) {
       setError(err.message);
     } finally {
@@ -56,22 +51,23 @@ function LoginContent() {
   const handleGoogleSuccess = async (credentialResponse) => {
     setLoading(true);
     setError("");
+
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-      const response = await fetch(`${apiUrl}/api/google-login`, {
+      const response = await fetch(`${API_URL}/api/google-login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include", // important for CORS
         body: JSON.stringify({
           token: credentialResponse.credential,
-          planTier: "Free" 
+          planTier: "Free", // or choose dynamically
         }),
       });
 
       const data = await response.json();
-      if (!response.ok) throw new Error(data.message || "Google Identity Verification Failed");
+      if (!response.ok) throw new Error(data.message || "Google login failed");
 
       localStorage.setItem("user", JSON.stringify(data.user));
-      router.push("/dashboard");
+      router.push(data.redirectTo || "/dashboard");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -81,9 +77,11 @@ function LoginContent() {
 
   return (
     <div className="min-h-screen bg-[#050505] text-white flex flex-col items-center justify-center p-6 relative overflow-hidden font-sans">
+      {/* Background decorations */}
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/10 blur-[120px] rounded-full" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-600/5 blur-[120px] rounded-full" />
 
+      {/* Exit button */}
       <Link href="/">
         <motion.button
           whileHover={{ x: -5 }}
@@ -94,11 +92,13 @@ function LoginContent() {
         </motion.button>
       </Link>
 
-      <motion.div 
+      {/* Login Box */}
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md bg-zinc-900/50 backdrop-blur-xl p-10 rounded-[2.5rem] border border-zinc-800 shadow-2xl z-10"
       >
+        {/* Header */}
         <div className="text-center mb-8">
           <div className="bg-blue-600/10 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-blue-600/20">
             <Shield className="text-blue-500" size={32} />
@@ -107,6 +107,7 @@ function LoginContent() {
           <p className="text-zinc-500 mt-2 text-[10px] font-black uppercase tracking-widest">Secure access to your Shield AI</p>
         </div>
 
+        {/* Google Login */}
         <div className="w-full mb-6 overflow-hidden rounded-xl flex justify-center border border-white/5 p-1 bg-black/20">
           <GoogleLogin
             onSuccess={handleGoogleSuccess}
@@ -117,18 +118,21 @@ function LoginContent() {
           />
         </div>
 
+        {/* Divider */}
         <div className="flex items-center gap-4 mb-8 text-zinc-800">
           <div className="h-[1px] w-full bg-zinc-800/50"></div>
           <span className="text-[10px] font-black tracking-[0.2em] text-zinc-600 uppercase">OR</span>
           <div className="h-[1px] w-full bg-zinc-800/50"></div>
         </div>
 
+        {/* Error message */}
         {error && (
           <div className="bg-red-500/10 border border-red-500/20 text-red-500 text-[10px] font-black uppercase tracking-widest p-4 rounded-xl mb-6 text-center animate-pulse">
             {error}
           </div>
         )}
 
+        {/* Email + Password form */}
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="relative group">
             <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-blue-500 transition-colors" size={18} />
@@ -150,7 +154,7 @@ function LoginContent() {
               className="w-full bg-black/40 border border-zinc-800 p-4 pl-12 pr-12 rounded-xl focus:border-blue-500 outline-none transition-all placeholder:text-zinc-700 text-sm"
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
             />
-            <button 
+            <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
               className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-blue-500 transition-colors"
@@ -167,6 +171,7 @@ function LoginContent() {
           </button>
         </form>
 
+        {/* Footer */}
         <p className="text-center mt-8 text-zinc-500 text-[10px] font-black uppercase tracking-widest">
           New operative?{" "}
           <Link href="/signup" className="text-blue-500 hover:underline ml-1">
