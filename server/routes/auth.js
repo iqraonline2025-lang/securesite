@@ -12,8 +12,8 @@ const router = express.Router();
 /* ================= ENV CHECK ================= */
 if (!process.env.STRIPE_SECRET_KEY) throw new Error("STRIPE_SECRET_KEY missing");
 if (!process.env.GOOGLE_CLIENT_ID) throw new Error("GOOGLE_CLIENT_ID missing");
-if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS)
-  throw new Error("Email credentials missing");
+if (!process.env.SENDGRID_API_KEY || !process.env.EMAIL_FROM)
+  throw new Error("SendGrid credentials missing");
 
 /* ================= SERVICES ================= */
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -21,10 +21,13 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2024-06-
 
 /* ================= EMAIL ================= */
 const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com", // or SendGrid for production
+  host: "smtp.sendgrid.net",
   port: 465,
   secure: true,
-  auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+  auth: {
+    user: "apikey",
+    pass: process.env.SENDGRID_API_KEY
+  },
 });
 
 transporter.verify((err, success) => {
@@ -32,11 +35,13 @@ transporter.verify((err, success) => {
   else console.log("SMTP READY ✅");
 });
 
-// Safe email sending function
+// numeric 6-digit code
+const generateCode = () => Math.floor(100000 + Math.random() * 900000).toString();
+
 const sendVerificationEmail = async (email, code) => {
   try {
     await transporter.sendMail({
-      from: `"Shield Security" <${process.env.EMAIL_USER}>`,
+      from: `"Shield Security" <${process.env.EMAIL_FROM}>`,
       to: email,
       subject: "Your Verification Code",
       html: `<h2>Verification Required</h2>
@@ -48,7 +53,8 @@ const sendVerificationEmail = async (email, code) => {
     return true;
   } catch (err) {
     console.error("EMAIL SEND ERROR:", err.message);
-    return false; // do not throw, route continues safely
+    console.log(`Fallback code for ${email}: ${code}`);
+    return false;
   }
 };
 
@@ -56,11 +62,12 @@ const sendVerificationEmail = async (email, code) => {
 const getPriceInCents = (tier) => ({ Premium: 900, Business: 4900, Lab: 2500 }[tier] || null);
 const normalizePlan = (plan) => plan?.charAt(0).toUpperCase() + plan?.slice(1).toLowerCase();
 
-/* ================= CREATE PAYMENT ================= */
+/* ================= ROUTES ================= */
+
+// CREATE PAYMENT INTENT
 router.post("/create-payment-intent", async (req, res) => {
   const planTier = normalizePlan(req.body.planTier);
   const email = req.body.email;
-
   const amount = getPriceInCents(planTier);
   if (!amount) return res.status(400).json({ message: "Invalid plan" });
 
@@ -78,7 +85,7 @@ router.post("/create-payment-intent", async (req, res) => {
   }
 });
 
-/* ================= SIGNUP ================= */
+// SIGNUP
 router.post("/signup", async (req, res) => {
   const { name, email, password, planTier } = req.body;
   const plan = normalizePlan(planTier);
@@ -102,11 +109,10 @@ router.post("/signup", async (req, res) => {
     });
 
     if (isRestricted) {
-      const code = crypto.randomBytes(3).toString("hex").toUpperCase();
+      const code = generateCode();
       user.verification_code = code;
       user.verification_expires = new Date(Date.now() + 10 * 60 * 1000);
-
-      await sendVerificationEmail(email, code); // safe
+      await sendVerificationEmail(email, code);
     }
 
     await user.save();
@@ -122,10 +128,9 @@ router.post("/signup", async (req, res) => {
   }
 });
 
-/* ================= LOGIN ================= */
+// LOGIN
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
-
   try {
     const user = await User.findOne({ email });
     if (!user) return res.status(401).json({ message: "Invalid credentials" });
@@ -145,24 +150,19 @@ router.post("/login", async (req, res) => {
   }
 });
 
-/* ================= SEND CODE ================= */
+// SEND CODE
 router.post("/send-code", async (req, res) => {
   const email = req.body.email;
-
   try {
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    const code = crypto.randomBytes(3).toString("hex").toUpperCase();
+    const code = generateCode();
     user.verification_code = code;
     user.verification_expires = new Date(Date.now() + 10 * 60 * 1000);
 
     await user.save();
-
-    const emailSent = await sendVerificationEmail(email, code);
-    if (!emailSent) {
-      return res.status(200).json({ success: true, message: "Code generated but failed to send email" });
-    }
+    await sendVerificationEmail(email, code);
 
     res.json({ success: true, message: "Code sent" });
   } catch (err) {
@@ -171,10 +171,9 @@ router.post("/send-code", async (req, res) => {
   }
 });
 
-/* ================= VERIFY CODE ================= */
+// VERIFY CODE
 router.post("/verify-code", async (req, res) => {
   const { email, code } = req.body;
-
   try {
     const user = await User.findOne({ email });
     if (!user || user.verification_code !== code)
@@ -199,7 +198,7 @@ router.post("/verify-code", async (req, res) => {
   }
 });
 
-/* ================= GOOGLE LOGIN ================= */
+// GOOGLE LOGIN
 router.post("/google-login", async (req, res) => {
   const { token, planTier } = req.body;
   const plan = normalizePlan(planTier);
@@ -228,10 +227,9 @@ router.post("/google-login", async (req, res) => {
   }
 });
 
-/* ================= VERIFY PAYMENT ================= */
+// VERIFY PAYMENT
 router.post("/verify-payment", async (req, res) => {
   const { paymentIntentId } = req.body;
-
   try {
     const intent = await stripe.paymentIntents.retrieve(paymentIntentId);
     if (intent.status !== "succeeded")
