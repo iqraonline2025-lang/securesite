@@ -1,5 +1,5 @@
 // index.js
-import "dotenv/config";
+import "dotenv/config"; // ⭐ MUST be first
 import express from "express";
 import cors from "cors";
 import path from "path";
@@ -16,38 +16,47 @@ import { connectDB } from "./config/db.js";
 const app = express();
 
 // -------------------------
-// 1️⃣ CORS Setup (Express 5 safe)
+// 1️⃣ Allowed Origins (CORS)
 // -------------------------
 const allowedOrigins = [
   "http://localhost:3000",
-  "https://securesite-6sge.vercel.app",
-  "https://securesite-5.onrender.com"
+  "https://securesite-6sge.vercel.app",   // your Vercel frontend
+  "https://securesite-5.onrender.com"     // backend self (if needed)
 ];
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true); // server-to-server requests
+    if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin)) return callback(null, true);
     callback(new Error("CORS blocked"));
   },
   credentials: true,
-  optionsSuccessStatus: 200 // safely handle preflight
+  optionsSuccessStatus: 200
 }));
 
 // -------------------------
-// 2️⃣ Middleware
+// 2️⃣ COOP / COEP headers for Google login / postMessage
+// -------------------------
+app.use((req, res, next) => {
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+  res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
+  next();
+});
+
+// -------------------------
+// 3️⃣ Middleware
 // -------------------------
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // -------------------------
-// 3️⃣ Static Files
+// 4️⃣ Static uploads
 // -------------------------
 const __dirname = path.resolve();
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // -------------------------
-// 4️⃣ API Routes
+// 5️⃣ API Routes
 // -------------------------
 app.use("/api", authRoutes);
 app.use("/api/dashboard", dashboardRoutes);
@@ -56,7 +65,7 @@ app.use("/api/assets", assetRoutes);
 app.use("/api/reports", reportRoutes);
 
 // -------------------------
-// 5️⃣ Test MongoDB Route
+// 6️⃣ Test MongoDB
 // -------------------------
 app.get("/test-db", async (req, res) => {
   try {
@@ -69,44 +78,41 @@ app.get("/test-db", async (req, res) => {
 });
 
 // -------------------------
-// 6️⃣ Serve React Frontend (Express 5 safe)
+// 7️⃣ Serve React frontend (Express 5 safe)
 // -------------------------
 const clientBuildPath = path.join(__dirname, "client/build");
 if (fs.existsSync(clientBuildPath)) {
   app.use(express.static(clientBuildPath));
-  
-  // Only this wildcard for React frontend
-  app.get("/*", (req, res) => {
+
+  // Important: catch-all route for React SPA
+  app.get("*", (req, res) => {
     res.sendFile(path.join(clientBuildPath, "index.html"));
   });
 }
 
 // -------------------------
-// 7️⃣ Root
+// 8️⃣ Root route
 // -------------------------
 app.get("/", (req, res) => {
   res.send("🚀 Shield Backend is Running with MongoDB!");
 });
 
 // -------------------------
-// 8️⃣ Error Handling
+// 9️⃣ Error handling
 // -------------------------
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({
-    message: "Internal Server Error",
-    error: err.message
-  });
+  res.status(500).json({ message: "Internal Server Error", error: err.message });
 });
 
 // -------------------------
-// 9️⃣ Environment Settings
+// 🔟 Environment settings
 // -------------------------
 app.set("trust proxy", 1);
 const PORT = process.env.PORT || 5000;
 
 // -------------------------
-// 🔟 Connect DB → Start Server
+// 1️⃣1️⃣ Connect DB → Start server
 // -------------------------
 connectDB().then(() => {
   app.listen(PORT, () => {
