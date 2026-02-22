@@ -18,17 +18,26 @@ const app = express();
 // -------------------------
 // 1️⃣ CORS Setup
 // -------------------------
+const allowedOrigins = [
+  "http://localhost:3000",                     // Local dev
+  "https://securesite-omega.vercel.app",      // Frontend deployed on Vercel
+  "https://securesite-5.onrender.com"         // Backend domain
+];
+
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-
-    const allowed =
-      origin.includes("localhost") ||
-      origin.endsWith(".vercel.app") ||
-      origin.endsWith(".onrender.com");
-
-    allowed ? callback(null, true) : callback(new Error("CORS blocked"));
+    if (!origin) return callback(null, true); // server-to-server requests
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error("CORS blocked"));
   },
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  credentials: true
+}));
+
+// Handle preflight OPTIONS requests
+app.options("*", cors({
+  origin: allowedOrigins,
+  methods: ["GET","POST","PUT","DELETE","OPTIONS"],
   credentials: true
 }));
 
@@ -67,14 +76,22 @@ app.get("/test-db", async (req, res) => {
 });
 
 // -------------------------
-// Root
+// 6️⃣ Optional: Serve React Frontend
+// -------------------------
+app.use(express.static(path.join(__dirname, "client/build")));
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "client/build", "index.html"));
+});
+
+// -------------------------
+// 7️⃣ Root
 // -------------------------
 app.get("/", (req, res) => {
   res.send("🚀 Shield Backend is Running with MongoDB!");
 });
 
 // -------------------------
-// 6️⃣ Error Handling
+// 8️⃣ Error Handling
 // -------------------------
 app.use((err, req, res, next) => {
   console.error(err.stack);
@@ -85,14 +102,14 @@ app.use((err, req, res, next) => {
 });
 
 // -------------------------
-// 7️⃣ Environment Settings
+// 9️⃣ Environment Settings
 // -------------------------
 app.set("trust proxy", 1);
 
 const PORT = process.env.PORT || 5000;
 
 // -------------------------
-// 8️⃣ Connect DB → Start Server
+// 🔟 Connect DB → Start Server
 // -------------------------
 connectDB().then(() => {
   app.listen(PORT, () => {
