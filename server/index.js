@@ -20,7 +20,7 @@ const app = express();
 // -------------------------
 const allowedOrigins = [
   "http://localhost:3000",
-  "https://securesite-omega.vercel.app",
+  "https://securesite-6sge.vercel.app",
   "https://securesite-5.onrender.com"
 ];
 
