@@ -16,7 +16,7 @@ import { connectDB } from "./config/db.js";
 const app = express();
 
 // -------------------------
-// 1️⃣ CORS Setup
+// 1️⃣ CORS Setup (fixed for Express 5)
 // -------------------------
 const allowedOrigins = [
   "http://localhost:3000",
@@ -26,19 +26,12 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true); // server-to-server requests
+    if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin)) return callback(null, true);
     callback(new Error("CORS blocked"));
   },
-  methods: ["GET","POST","PUT","DELETE","OPTIONS"],
-  credentials: true
-}));
-
-// ✅ Preflight requests for all routes (Express 5 fix: use /* instead of *)
-app.options("/*", cors({
-  origin: allowedOrigins,
-  methods: ["GET","POST","PUT","DELETE","OPTIONS"],
-  credentials: true
+  credentials: true,
+  optionsSuccessStatus: 200 // lets preflight requests succeed
 }));
 
 // -------------------------
@@ -76,12 +69,12 @@ app.get("/test-db", async (req, res) => {
 });
 
 // -------------------------
-// 6️⃣ Serve React Frontend (Express 5 fixed)
+// 6️⃣ Serve React Frontend (Express 5 safe)
 // -------------------------
 const clientBuildPath = path.join(__dirname, "client/build");
 if (fs.existsSync(clientBuildPath)) {
   app.use(express.static(clientBuildPath));
-  app.get("/*", (req, res) => { // ✅ use /*, not *
+  app.get("/*", (req, res) => {
     res.sendFile(path.join(clientBuildPath, "index.html"));
   });
 }
