@@ -20,7 +20,7 @@ const app = express();
 // -------------------------
 const allowedOrigins = [
   "http://localhost:3000",                     // Local dev
-  "https://securesite-omega.vercel.app",      // Frontend deployed on Vercel
+  "https://securesite-omega.vercel.app",      // Vercel frontend
   "https://securesite-5.onrender.com"         // Backend domain
 ];
 
@@ -76,11 +76,13 @@ app.get("/test-db", async (req, res) => {
 });
 
 // -------------------------
-// 6️⃣ Optional: Serve React Frontend
+// 6️⃣ Serve React Frontend (Express 5 fixed)
 // -------------------------
-app.use(express.static(path.join(__dirname, "client/build")));
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "client/build", "index.html"));
+const clientBuildPath = path.join(__dirname, "client/build");
+app.use(express.static(clientBuildPath));
+
+app.get("/*", (req, res) => {
+  res.sendFile(path.join(clientBuildPath, "index.html"));
 });
 
 // -------------------------
