@@ -3,7 +3,6 @@ import "dotenv/config"; // ⭐ MUST be first
 import express from "express";
 import cors from "cors";
 import path from "path";
-import fs from "fs";
 
 import authRoutes from "./routes/auth.js";
 import dashboardRoutes from "./routes/dashboard.js";
@@ -19,16 +18,16 @@ const app = express();
 // 1️⃣ Allowed Origins (CORS)
 // -------------------------
 const allowedOrigins = [
-  "http://localhost:3000",
-  "https://securesite-9.onrender.com/",   // your Vercel frontend
-  "https://securesite-8.onrender.com"     // backend self (if needed)
+  "http://localhost:3000",               // local dev
+  "https://securesite-9.onrender.com"    // static frontend
 ];
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true); // Postman or server requests
+    if (!origin) return callback(null, true); // server-to-server or Postman
     if (allowedOrigins.includes(origin)) return callback(null, true);
-    callback(new Error("CORS blocked"));
+    console.warn("CORS blocked:", origin);
+    callback(null, false);
   },
   credentials: true,
   optionsSuccessStatus: 200
@@ -36,7 +35,6 @@ app.use(cors({
 
 // -------------------------
 // 2️⃣ COOP / COEP headers
-// Only apply for trusted frontend origins
 // -------------------------
 app.use((req, res, next) => {
   const origin = req.headers.origin;
@@ -82,27 +80,14 @@ app.get("/test-db", async (req, res) => {
 });
 
 // -------------------------
-// 7️⃣ Serve React frontend (Express 5 safe)
-// -------------------------
-const clientBuildPath = path.join(__dirname, "client/build");
-if (fs.existsSync(clientBuildPath)) {
-  app.use(express.static(clientBuildPath));
-
-  // Catch-all route for SPA
-  app.get("*", (req, res) => {
-    res.sendFile(path.join(clientBuildPath, "index.html"));
-  });
-}
-
-// -------------------------
-// 8️⃣ Root route
+// 7️⃣ Root route
 // -------------------------
 app.get("/", (req, res) => {
   res.send("🚀 Shield Backend is Running with MongoDB!");
 });
 
 // -------------------------
-// 9️⃣ Error handling
+// 8️⃣ Error handling
 // -------------------------
 app.use((err, req, res, next) => {
   console.error(err.stack);
@@ -110,13 +95,13 @@ app.use((err, req, res, next) => {
 });
 
 // -------------------------
-// 🔟 Environment settings
+// 9️⃣ Environment settings
 // -------------------------
 app.set("trust proxy", 1);
 const PORT = process.env.PORT || 5000;
 
 // -------------------------
-// 1️⃣1️⃣ Connect DB → Start server
+// 🔟 Connect DB → Start server
 // -------------------------
 connectDB().then(() => {
   app.listen(PORT, () => {
