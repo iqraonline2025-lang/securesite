@@ -21,8 +21,11 @@ function LoginContent() {
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+  const API_URL = process.env.NEXT_PUBLIC_API_URL; // must be set in Render env
 
+  // -------------------------
+  // 1️⃣ Email/Password Login
+  // -------------------------
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -32,7 +35,7 @@ function LoginContent() {
       const response = await fetch(`${API_URL}/api/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include", // include cookies if any
+        credentials: "include", // include cookies for session
         body: JSON.stringify(formData),
       });
 
@@ -48,6 +51,9 @@ function LoginContent() {
     }
   };
 
+  // -------------------------
+  // 2️⃣ Google OAuth Login
+  // -------------------------
   const handleGoogleSuccess = async (credentialResponse) => {
     setLoading(true);
     setError("");
@@ -56,10 +62,10 @@ function LoginContent() {
       const response = await fetch(`${API_URL}/api/google-login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include", // important for CORS
+        credentials: "include", // include cookies
         body: JSON.stringify({
           token: credentialResponse.credential,
-          planTier: "Free", // or choose dynamically
+          planTier: "Free",
         }),
       });
 
@@ -75,6 +81,9 @@ function LoginContent() {
     }
   };
 
+  // -------------------------
+  // 3️⃣ Render UI
+  // -------------------------
   return (
     <div className="min-h-screen bg-[#050505] text-white flex flex-col items-center justify-center p-6 relative overflow-hidden font-sans">
       {/* Background decorations */}
@@ -115,6 +124,7 @@ function LoginContent() {
             theme="filled_black"
             shape="pill"
             width="320"
+            referrerPolicy="no-referrer"
           />
         </div>
 
