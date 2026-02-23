@@ -17,6 +17,7 @@
     "mongoose": "^9.2.1",
     "multer": "^2.0.2",
     "nodemailer": "^8.0.1",
+    "sendgrid": "github:sendgrid/sendgrid-nodejs",
     "stripe": "^20.1.2"
   },
   "devDependencies": {
