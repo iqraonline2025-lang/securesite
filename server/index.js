@@ -1,8 +1,9 @@
 // index.js
-import "dotenv/config"; // ⭐ MUST be first
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import path from "path";
+import fs from "fs";
 
 import authRoutes from "./routes/auth.js";
 import dashboardRoutes from "./routes/dashboard.js";
@@ -18,47 +19,34 @@ const app = express();
 // 1️⃣ Allowed Origins (CORS)
 // -------------------------
 const allowedOrigins = [
-  "http://localhost:3000",               // local dev
-  "https://securesite-9.onrender.com"    // static frontend
+  "http://localhost:3000",
+  "https://securesite-9.onrender.com" // your static frontend
 ];
 
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin) return callback(null, true); // server-to-server or Postman
     if (allowedOrigins.includes(origin)) return callback(null, true);
-    console.warn("CORS blocked:", origin);
-    callback(null, false);
+    callback(new Error("CORS blocked"));
   },
   credentials: true,
   optionsSuccessStatus: 200
 }));
 
 // -------------------------
-// 2️⃣ COOP / COEP headers
-// -------------------------
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
-    res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
-  }
-  next();
-});
-
-// -------------------------
-// 3️⃣ Middleware
+// 2️⃣ Middleware
 // -------------------------
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // -------------------------
-// 4️⃣ Static uploads
+// 3️⃣ Static uploads
 // -------------------------
 const __dirname = path.resolve();
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // -------------------------
-// 5️⃣ API Routes
+// 4️⃣ API Routes
 // -------------------------
 app.use("/api", authRoutes);
 app.use("/api/dashboard", dashboardRoutes);
@@ -67,7 +55,7 @@ app.use("/api/assets", assetRoutes);
 app.use("/api/reports", reportRoutes);
 
 // -------------------------
-// 6️⃣ Test MongoDB
+// 5️⃣ Test MongoDB
 // -------------------------
 app.get("/test-db", async (req, res) => {
   try {
@@ -78,6 +66,17 @@ app.get("/test-db", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// -------------------------
+// 6️⃣ Serve React frontend (optional for monorepo, can remove if using static site)
+// -------------------------
+const clientBuildPath = path.join(__dirname, "client/build");
+if (fs.existsSync(clientBuildPath)) {
+  app.use(express.static(clientBuildPath));
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(clientBuildPath, "index.html"));
+  });
+}
 
 // -------------------------
 // 7️⃣ Root route
