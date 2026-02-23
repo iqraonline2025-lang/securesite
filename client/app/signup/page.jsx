@@ -48,7 +48,6 @@ function SignupContent() {
   const [dogCode, setDogCode] = useState("");
   const [dogError, setDogError] = useState("");
 
-  // Pre-select plan from URL
   useEffect(() => {
     const planId = searchParams.get("plan");
     if (planId) {
@@ -57,7 +56,6 @@ function SignupContent() {
     }
   }, [searchParams]);
 
-  // Auto redirect after success
   useEffect(() => {
     if (step === 6) {
       const t = setTimeout(() => router.push("/dashboard"), 3000);
@@ -65,7 +63,6 @@ function SignupContent() {
     }
   }, [step, router]);
 
-  // Initialize payment
   const initPayment = async (tier, email) => {
     try {
       const res = await fetch(`${API_BASE}/api/create-payment-intent`, {
@@ -76,13 +73,12 @@ function SignupContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message);
       setClientSecret(data.clientSecret);
-      setStep(3); // go to payment form
+      setStep(3);
     } catch (err) {
       alert(err.message || "Payment initialization failed");
     }
   };
 
-  // Google login
   const handleGoogleAuth = async (cred) => {
     setLoading(true);
     try {
@@ -109,7 +105,6 @@ function SignupContent() {
     }
   };
 
-  // Email/password signup/login
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -138,19 +133,17 @@ function SignupContent() {
     }
   };
 
-  // After payment success → generate code
   const handlePaymentSuccess = (user) => {
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     setFormData(prev => ({ ...prev, verificationCode: code }));
     localStorage.setItem("user", JSON.stringify(user));
-    setStep(4); // show code after payment
+    setStep(4);
   };
 
-  // Handle dog verification submission
   const handleDogCodeSubmit = (e) => {
     e.preventDefault();
     if (dogCode === formData.verificationCode) {
-      setStep(6); // success → dashboard
+      setStep(6);
     } else {
       setDogError("Invalid verification code");
     }
@@ -158,7 +151,6 @@ function SignupContent() {
 
   return (
     <div className="min-h-screen bg-[#050505] text-zinc-100 flex flex-col items-center justify-center p-6 relative overflow-hidden font-sans">
-      {/* Background blobs */}
       <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-blue-600/10 blur-[120px] rounded-full animate-pulse" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-purple-600/10 blur-[120px] rounded-full animate-pulse" />
 
@@ -169,7 +161,6 @@ function SignupContent() {
       </Link>
 
       <AnimatePresence mode="wait">
-
         {/* STEP 1 — Plan Select */}
         {step === 1 && (
           <motion.div key="1" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} className="max-w-5xl w-full">
@@ -235,7 +226,7 @@ function SignupContent() {
           </motion.div>
         )}
 
-        {/* STEP 4 — Payment Success + Show Code */}
+        {/* STEP 4 — Payment Success + Code */}
         {step === 4 && (
           <motion.div key="code-display" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="text-center max-w-md w-full">
             <h2 className="text-3xl font-bold mb-4">Payment Successful!</h2>
@@ -245,7 +236,7 @@ function SignupContent() {
           </motion.div>
         )}
 
-        {/* STEP 5 — Dog Verification Card */}
+        {/* STEP 5 — Dog Verification */}
         {step === 5 && (
           <DogVerification
             formData={formData}
@@ -267,7 +258,6 @@ function SignupContent() {
             <p className="text-zinc-500 font-medium">Redirecting to your dashboard...</p>
           </motion.div>
         )}
-
       </AnimatePresence>
     </div>
   );
@@ -355,4 +345,68 @@ function DogVerification({ formData, dogCode, setDogCode, dogError, handleDogCod
   return (
     <motion.div key="dog" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-md w-full">
       <div className="bg-zinc-950 border border-white/10 rounded-[2.5rem] overflow-hidden backdrop-blur-3xl shadow-2xl">
-        <div className="bg-white/5 px-
+        <div className="bg-white/5 px-6 py-3 border-b border-white/5 flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-emerald-500">System Link Active</span>
+          </div>
+          <span className="text-[10px] font-mono text-zinc-500">ID: UNIT_K9_PRO</span>
+        </div>
+
+        <div className="p-8">
+          <div className="relative group mb-8">
+            <div className="absolute inset-0 z-10 pointer-events-none overflow-hidden rounded-3xl">
+              <motion.div 
+                initial={{ top: "-10%" }}
+                animate={{ top: "110%" }}
+                transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                className="w-full h-[2px] bg-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.8)] relative"
+              />
+            </div>
+
+            <div className="bg-gradient-to-b from-zinc-900 to-black p-6 rounded-3xl border border-white/5 relative overflow-hidden">
+              <Image
+                src={dogImage}
+                width={200}
+                height={200}
+                alt="robotic unit"
+                className="mx-auto drop-shadow-[0_0_30px_rgba(59,130,246,0.2)] grayscale group-hover:grayscale-0 transition-all duration-700"
+                unoptimized
+              />
+            </div>
+          </div>
+
+          <div className="text-center mb-6">
+            <h3 className="text-xl font-bold tracking-tight">Biometric Override Required</h3>
+            <p className="text-zinc-500 text-xs mt-2 leading-relaxed">
+              Enter the 6-digit code displayed earlier: <br/>
+              <span className="text-zinc-300 font-medium">{formData.email}</span>.
+            </p>
+          </div>
+
+          <form onSubmit={handleDogCodeSubmit} className="space-y-4">
+            <input
+              value={dogCode}
+              onChange={e => setDogCode(e.target.value)}
+              maxLength={6}
+              placeholder="000000"
+              className="w-full p-4 rounded-2xl bg-black border border-white/10 text-center font-mono text-2xl tracking-[0.3em] text-blue-400 focus:outline-none focus:border-blue-500 transition-all"
+            />
+            {dogError && <p className="text-red-500 text-center text-xs">{dogError}</p>}
+            <button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-2xl transition-all">Verify</button>
+          </form>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// Loading screen
+function LoadingScreen() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-[#050505]">
+      <Loader2 className="animate-spin text-blue-500" size={48} />
+    </div>
+  );
+}
+
