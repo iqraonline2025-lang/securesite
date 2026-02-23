@@ -11,7 +11,7 @@ const router = express.Router();
 /* ================= ENV CHECK ================= */
 if (!process.env.STRIPE_SECRET_KEY) throw new Error("STRIPE_SECRET_KEY missing");
 if (!process.env.GOOGLE_CLIENT_ID) throw new Error("GOOGLE_CLIENT_ID missing");
-if (!process.env.EMAIL_USER || !process.env.EMAIL_APP_PASS)
+if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS)
   throw new Error("Gmail credentials missing");
 
 /* ================= SERVICES ================= */
@@ -23,7 +23,7 @@ const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_APP_PASS,
+    pass: process.env.EMAIL_PASS,
   },
 });
 
