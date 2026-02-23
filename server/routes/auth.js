@@ -3,51 +3,51 @@ import express from "express";
 import bcrypt from "bcrypt";
 import { OAuth2Client } from "google-auth-library";
 import Stripe from "stripe";
-import crypto from "crypto";
-import nodemailer from "nodemailer";
 import User from "../models/User.js";
+import nodemailer from "nodemailer";
 
 const router = express.Router();
 
 /* ================= ENV CHECK ================= */
 if (!process.env.STRIPE_SECRET_KEY) throw new Error("STRIPE_SECRET_KEY missing");
 if (!process.env.GOOGLE_CLIENT_ID) throw new Error("GOOGLE_CLIENT_ID missing");
-if (!process.env.SENDGRID_API_KEY || !process.env.EMAIL_FROM)
-  throw new Error("SendGrid credentials missing");
+if (!process.env.EMAIL_USER || !process.env.EMAIL_APP_PASS)
+  throw new Error("Gmail credentials missing");
 
 /* ================= SERVICES ================= */
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2024-06-20" });
 
-/* ================= EMAIL ================= */
+/* ================= EMAIL (Gmail SMTP) ================= */
 const transporter = nodemailer.createTransport({
-  host: "smtp.sendgrid.net",
-  port: 465,
-  secure: true,
+  service: "gmail",
   auth: {
-    user: "apikey",
-    pass: process.env.SENDGRID_API_KEY
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_APP_PASS,
   },
 });
 
 transporter.verify((err, success) => {
   if (err) console.error("SMTP ERROR:", err);
-  else console.log("SMTP READY ✅");
+  else console.log("GMAIL SMTP READY ✅");
 });
 
 // numeric 6-digit code
 const generateCode = () => Math.floor(100000 + Math.random() * 900000).toString();
 
+// send verification email
 const sendVerificationEmail = async (email, code) => {
   try {
     await transporter.sendMail({
-      from: `"Shield Security" <${process.env.EMAIL_FROM}>`,
+      from: `"Shield Security" <${process.env.GMAIL_USER}>`,
       to: email,
-      subject: "Your Verification Code",
-      html: `<h2>Verification Required</h2>
-             <p>Your secure access code:</p>
-             <h1>${code}</h1>
-             <p>Expires in 10 minutes</p>`,
+      subject: "Your Shield Verification Code",
+      html: `
+        <h2>Verification Required</h2>
+        <p>Your secure access code:</p>
+        <h1>${code}</h1>
+        <p>Expires in 10 minutes</p>
+      `,
     });
     console.log(`✅ Verification code sent to ${email}`);
     return true;
@@ -150,7 +150,7 @@ router.post("/login", async (req, res) => {
   }
 });
 
-// SEND CODE
+// SEND CODE (for verification)
 router.post("/send-code", async (req, res) => {
   const email = req.body.email;
   try {
