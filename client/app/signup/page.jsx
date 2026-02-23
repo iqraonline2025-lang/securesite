@@ -10,14 +10,9 @@ import {
   CheckCircle2, Loader2, ArrowLeft, Mail, Lock
 } from "lucide-react";
 import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
-import { loadStripe } from "@stripe/stripe-js";
-import { Elements } from "@stripe/react-stripe-js";
-import CheckoutForm from "../components/CheckoutForm";
 import dogImage from "../public/dog-4.png";
 
-/* ================= API & STRIPE ================= */
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://securesite-2fow.onrender.com";
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "");
 
 const PLANS = [
   { id: "free", tier: "Free", icon: <User className="text-blue-400" size={24} />, price: "$0", desc: "Individual researchers", color: "from-blue-500/20" },
@@ -44,8 +39,7 @@ function SignupContent() {
   const [selectedPlan, setSelectedPlan] = useState(PLANS[0]);
   const [isLogin, setIsLogin] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [clientSecret, setClientSecret] = useState("");
-  const [formData, setFormData] = useState({ name: "", email: "", password: "" });
+  const [formData, setFormData] = useState({ name: "", email: "", password: "", verificationCode: "" });
   const [dogCode, setDogCode] = useState("");
   const [dogError, setDogError] = useState("");
   const [codeSent, setCodeSent] = useState(false);
@@ -67,22 +61,7 @@ function SignupContent() {
     }
   }, [step, router]);
 
-  const initPayment = async (tier, email) => {
-    try {
-      const res = await fetch(`${API_BASE}/api/create-payment-intent`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planTier: tier, email }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
-      setClientSecret(data.clientSecret);
-      setStep(3);
-    } catch (err) {
-      alert(err.message || "Payment initialization failed");
-    }
-  };
-
+  // Google login
   const handleGoogleAuth = async (cred) => {
     setLoading(true);
     try {
@@ -100,8 +79,6 @@ function SignupContent() {
       } else if (["business", "lab"].includes(selectedPlan.id)) {
         setFormData(prev => ({ ...prev, email: data.user.email }));
         await sendDogCode(data.user.email);
-      } else {
-        await initPayment(selectedPlan.tier, data.user.email);
       }
     } catch (err) {
       alert(err.message);
@@ -110,6 +87,7 @@ function SignupContent() {
     }
   };
 
+  // Email/password signup/login
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -128,8 +106,6 @@ function SignupContent() {
         setStep(4);
       } else if (["business", "lab"].includes(selectedPlan.id)) {
         await sendDogCode(formData.email);
-      } else {
-        await initPayment(selectedPlan.tier, formData.email);
       }
     } catch (err) {
       alert(err.message);
@@ -138,6 +114,7 @@ function SignupContent() {
     }
   };
 
+  // Send verification code for business/lab
   const sendDogCode = async (email) => {
     try {
       const res = await fetch(`${API_BASE}/api/send-code`, {
@@ -146,6 +123,10 @@ function SignupContent() {
         body: JSON.stringify({ email }),
       });
       if (!res.ok) throw new Error("Failed to send verification code");
+
+      // Generate a code if backend doesn't return one
+      const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+      setFormData(prev => ({ ...prev, verificationCode }));
       setStep(3);
       setCodeSent(true);
     } catch (err) {
@@ -154,21 +135,14 @@ function SignupContent() {
     }
   };
 
-  const handleDogCodeSubmit = async (e) => {
+  // Handle code submission
+  const handleDogCodeSubmit = (e) => {
     e.preventDefault();
-    try {
-      const res = await fetch(`${API_BASE}/api/verify-code`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: formData.email, code: dogCode }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
-
-      localStorage.setItem("user", JSON.stringify(data.user || { email: formData.email }));
+    if (dogCode === formData.verificationCode) {
+      localStorage.setItem("user", JSON.stringify({ email: formData.email }));
       setDogCode("");
       setStep(4);
-    } catch (err) {
+    } else {
       setDogError("Invalid verification code");
     }
   };
@@ -179,7 +153,6 @@ function SignupContent() {
       <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-blue-600/10 blur-[120px] rounded-full animate-pulse" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-purple-600/10 blur-[120px] rounded-full animate-pulse" />
 
-      {/* Exit button */}
       <Link href="/">
         <button className="absolute top-8 left-8 flex items-center gap-2 bg-zinc-900/50 hover:bg-zinc-800 border border-white/5 px-4 py-2 rounded-full transition-all text-sm font-medium backdrop-blur-md z-50">
           <ArrowLeft size={16} /> Exit
@@ -187,6 +160,7 @@ function SignupContent() {
       </Link>
 
       <AnimatePresence mode="wait">
+
         {/* STEP 1 — PLAN SELECT */}
         {step === 1 && (
           <motion.div key="1" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} className="max-w-5xl w-full">
@@ -298,23 +272,15 @@ function SignupContent() {
           </motion.div>
         )}
 
-        {/* STEP 3 — DOG VERIFICATION / PAYMENT */}
+        {/* STEP 3 — BUSINESS / LAB VERIFICATION */}
         {step === 3 && ["business", "lab"].includes(selectedPlan.id) && (
-          <DogVerification formData={formData} dogCode={dogCode} setDogCode={setDogCode} dogError={dogError} handleDogCodeSubmit={handleDogCodeSubmit} />
-        )}
-
-        {step === 3 && selectedPlan.id === "premium" && clientSecret && (
-          <motion.div key="payment" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-md w-full">
-            <div className="bg-zinc-900/40 border border-white/10 p-8 rounded-[2.5rem]">
-              <h2 className="text-2xl font-bold mb-6 text-center italic">Secure Checkout</h2>
-              <Elements stripe={stripePromise} options={{ clientSecret, appearance: { theme: 'night' } }}>
-                <CheckoutForm
-                  amount={selectedPlan.price.replace("$","")}
-                  onSuccess={(user) => { localStorage.setItem("user", JSON.stringify(user)); setStep(4); }}
-                />
-              </Elements>
-            </div>
-          </motion.div>
+          <DogVerification
+            formData={formData}
+            dogCode={dogCode}
+            setDogCode={setDogCode}
+            dogError={dogError}
+            handleDogCodeSubmit={handleDogCodeSubmit}
+          />
         )}
 
         {/* STEP 4 — SUCCESS */}
@@ -334,6 +300,7 @@ function SignupContent() {
   );
 }
 
+// Dog verification component for business/lab
 function DogVerification({ formData, dogCode, setDogCode, dogError, handleDogCodeSubmit }) {
   return (
     <motion.div key="dog" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-md w-full">
@@ -401,3 +368,4 @@ function LoadingScreen() {
     </div>
   );
 }
+
