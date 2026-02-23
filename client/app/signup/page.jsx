@@ -10,9 +10,13 @@ import {
   CheckCircle2, Loader2, ArrowLeft, Mail, Lock
 } from "lucide-react";
 import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
+import { loadStripe } from "@stripe/stripe-js";
+import { Elements } from "@stripe/react-stripe-js";
+import CheckoutForm from "../components/CheckoutForm";
 import dogImage from "../public/dog-4.png";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://securesite-2fow.onrender.com";
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "");
 
 const PLANS = [
   { id: "free", tier: "Free", icon: <User className="text-blue-400" size={24} />, price: "$0", desc: "Individual researchers", color: "from-blue-500/20" },
@@ -39,10 +43,10 @@ function SignupContent() {
   const [selectedPlan, setSelectedPlan] = useState(PLANS[0]);
   const [isLogin, setIsLogin] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [clientSecret, setClientSecret] = useState("");
   const [formData, setFormData] = useState({ name: "", email: "", password: "", verificationCode: "" });
   const [dogCode, setDogCode] = useState("");
   const [dogError, setDogError] = useState("");
-  const [codeSent, setCodeSent] = useState(false);
 
   // Pre-select plan from URL
   useEffect(() => {
@@ -55,11 +59,28 @@ function SignupContent() {
 
   // Auto redirect after success
   useEffect(() => {
-    if (step === 4) {
+    if (step === 6) {
       const t = setTimeout(() => router.push("/dashboard"), 3000);
       return () => clearTimeout(t);
     }
   }, [step, router]);
+
+  // Initialize payment
+  const initPayment = async (tier, email) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/create-payment-intent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planTier: tier, email }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message);
+      setClientSecret(data.clientSecret);
+      setStep(3); // go to payment form
+    } catch (err) {
+      alert(err.message || "Payment initialization failed");
+    }
+  };
 
   // Google login
   const handleGoogleAuth = async (cred) => {
@@ -73,12 +94,13 @@ function SignupContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message);
 
+      setFormData(prev => ({ ...prev, email: data.user.email }));
+
       if (selectedPlan.id === "free") {
         localStorage.setItem("user", JSON.stringify(data.user));
-        setStep(4);
-      } else if (["business", "lab"].includes(selectedPlan.id)) {
-        setFormData(prev => ({ ...prev, email: data.user.email }));
-        await sendDogCode(data.user.email);
+        setStep(6);
+      } else if (["business", "lab", "premium"].includes(selectedPlan.id)) {
+        await initPayment(selectedPlan.tier, data.user.email);
       }
     } catch (err) {
       alert(err.message);
@@ -101,11 +123,13 @@ function SignupContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message);
 
+      setFormData(prev => ({ ...prev, email: data.user.email }));
+
       if (selectedPlan.id === "free") {
         localStorage.setItem("user", JSON.stringify(data.user));
-        setStep(4);
-      } else if (["business", "lab"].includes(selectedPlan.id)) {
-        await sendDogCode(formData.email);
+        setStep(6);
+      } else if (["business", "lab", "premium"].includes(selectedPlan.id)) {
+        await initPayment(selectedPlan.tier, formData.email);
       }
     } catch (err) {
       alert(err.message);
@@ -114,34 +138,19 @@ function SignupContent() {
     }
   };
 
-  // Send verification code for business/lab
-  const sendDogCode = async (email) => {
-    try {
-      const res = await fetch(`${API_BASE}/api/send-code`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
-      if (!res.ok) throw new Error("Failed to send verification code");
-
-      // Generate a code if backend doesn't return one
-      const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-      setFormData(prev => ({ ...prev, verificationCode }));
-      setStep(3);
-      setCodeSent(true);
-    } catch (err) {
-      console.error(err);
-      alert(err.message);
-    }
+  // After payment success → generate code
+  const handlePaymentSuccess = (user) => {
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    setFormData(prev => ({ ...prev, verificationCode: code }));
+    localStorage.setItem("user", JSON.stringify(user));
+    setStep(4); // show code after payment
   };
 
-  // Handle code submission
+  // Handle dog verification submission
   const handleDogCodeSubmit = (e) => {
     e.preventDefault();
     if (dogCode === formData.verificationCode) {
-      localStorage.setItem("user", JSON.stringify({ email: formData.email }));
-      setDogCode("");
-      setStep(4);
+      setStep(6); // success → dashboard
     } else {
       setDogError("Invalid verification code");
     }
@@ -161,7 +170,7 @@ function SignupContent() {
 
       <AnimatePresence mode="wait">
 
-        {/* STEP 1 — PLAN SELECT */}
+        {/* STEP 1 — Plan Select */}
         {step === 1 && (
           <motion.div key="1" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} className="max-w-5xl w-full">
             <div className="text-center mb-12">
@@ -195,85 +204,49 @@ function SignupContent() {
           </motion.div>
         )}
 
-        {/* STEP 2 — AUTH */}
+        {/* STEP 2 — Auth */}
         {step === 2 && (
           <motion.div key="2" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="max-w-md w-full">
-            <div className="bg-zinc-900/40 border border-white/10 p-10 rounded-[2.5rem] backdrop-blur-xl shadow-2xl">
-              <div className="text-center mb-8">
-                <h2 className="text-3xl font-bold mb-2 italic uppercase tracking-tighter">
-                  {isLogin ? "Welcome Back" : "Initialize Account"}
-                </h2>
-                <p className="text-zinc-500 text-sm italic">Plan: {selectedPlan.tier}</p>
-              </div>
+            <AuthCard
+              isLogin={isLogin}
+              setIsLogin={setIsLogin}
+              formData={formData}
+              setFormData={setFormData}
+              handleAuthSubmit={handleAuthSubmit}
+              handleGoogleAuth={handleGoogleAuth}
+              selectedPlan={selectedPlan}
+              loading={loading}
+            />
+          </motion.div>
+        )}
 
-              <div className="flex justify-center mb-8">
-                <GoogleLogin onSuccess={handleGoogleAuth} theme="filled_black" shape="pill" />
-              </div>
-
-              <div className="relative flex items-center my-6">
-                <div className="flex-grow border-t border-white/5"></div>
-                <span className="mx-4 text-xs font-bold text-zinc-600 uppercase tracking-widest">Or continue with</span>
-                <div className="flex-grow border-t border-white/5"></div>
-              </div>
-
-              <form onSubmit={handleAuthSubmit} className="space-y-4">
-                {!isLogin && (
-                  <div className="relative">
-                    <User className="absolute left-4 top-3.5 text-zinc-500" size={18} />
-                    <input
-                      required
-                      placeholder="Full Name"
-                      className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-black/40 border border-white/5 focus:border-blue-500/50 outline-none transition-all placeholder:text-zinc-600"
-                      onChange={e => setFormData({ ...formData, name: e.target.value })}
-                    />
-                  </div>
-                )}
-                <div className="relative">
-                  <Mail className="absolute left-4 top-3.5 text-zinc-500" size={18} />
-                  <input
-                    required
-                    type="email"
-                    placeholder="Email Address"
-                    className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-black/40 border border-white/5 focus:border-blue-500/50 outline-none transition-all placeholder:text-zinc-600"
-                    onChange={e => setFormData({ ...formData, email: e.target.value })}
-                  />
-                </div>
-                <div className="relative">
-                  <Lock className="absolute left-4 top-3.5 text-zinc-500" size={18} />
-                  <input
-                    required
-                    type="password"
-                    placeholder="Password"
-                    className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-black/40 border border-white/5 focus:border-blue-500/50 outline-none transition-all placeholder:text-zinc-600"
-                    onChange={e => setFormData({ ...formData, password: e.target.value })}
-                  />
-                </div>
-
-                <button
-                  disabled={loading}
-                  className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-2xl transition-all shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 group"
-                >
-                  {loading ? <Loader2 className="animate-spin" /> : (
-                    <>
-                      {isLogin ? "Sign In" : "Create Account"}
-                      <Zap size={16} className="group-hover:translate-x-1 transition-transform" />
-                    </>
-                  )}
-                </button>
-              </form>
-
-              <button
-                onClick={() => setIsLogin(!isLogin)}
-                className="mt-6 text-xs font-bold text-zinc-500 hover:text-white transition-colors w-full uppercase tracking-widest"
-              >
-                {isLogin ? "Need an account? Sign Up" : "Already registered? Log In"}
-              </button>
+        {/* STEP 3 — Payment */}
+        {step === 3 && clientSecret && (
+          <motion.div key="payment" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-md w-full">
+            <div className="bg-zinc-900/40 border border-white/10 p-8 rounded-[2.5rem]">
+              <h2 className="text-2xl font-bold mb-6 text-center italic">Secure Checkout</h2>
+              <Elements stripe={stripePromise} options={{ clientSecret, appearance: { theme: 'night' } }}>
+                <CheckoutForm
+                  amount={selectedPlan.price.replace("$","")}
+                  onSuccess={handlePaymentSuccess}
+                />
+              </Elements>
             </div>
           </motion.div>
         )}
 
-        {/* STEP 3 — BUSINESS / LAB VERIFICATION */}
-        {step === 3 && ["business", "lab"].includes(selectedPlan.id) && (
+        {/* STEP 4 — Payment Success + Show Code */}
+        {step === 4 && (
+          <motion.div key="code-display" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="text-center max-w-md w-full">
+            <h2 className="text-3xl font-bold mb-4">Payment Successful!</h2>
+            <p className="text-zinc-400 mb-6">Use this code to proceed:</p>
+            <div className="text-4xl font-mono bg-black/30 p-4 rounded-2xl border border-white/10 text-blue-400">{formData.verificationCode}</div>
+            <button onClick={() => setStep(5)} className="mt-6 w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-2xl">Continue to Verification</button>
+          </motion.div>
+        )}
+
+        {/* STEP 5 — Dog Verification Card */}
+        {step === 5 && (
           <DogVerification
             formData={formData}
             dogCode={dogCode}
@@ -283,15 +256,15 @@ function SignupContent() {
           />
         )}
 
-        {/* STEP 4 — SUCCESS */}
-        {step === 4 && (
-          <motion.div key="4" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="text-center">
+        {/* STEP 6 — Final Success */}
+        {step === 6 && (
+          <motion.div key="success" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="text-center">
             <div className="relative mb-8">
               <div className="absolute inset-0 bg-emerald-500/20 blur-3xl rounded-full" />
               <CheckCircle2 size={100} className="text-emerald-500 mx-auto relative z-10 animate-bounce" />
             </div>
             <h2 className="text-5xl font-black italic uppercase tracking-tighter mb-2">Access Granted</h2>
-            <p className="text-zinc-500 font-medium">Syncing with secure infrastructure...</p>
+            <p className="text-zinc-500 font-medium">Redirecting to your dashboard...</p>
           </motion.div>
         )}
 
@@ -300,72 +273,86 @@ function SignupContent() {
   );
 }
 
-// Dog verification component for business/lab
-function DogVerification({ formData, dogCode, setDogCode, dogError, handleDogCodeSubmit }) {
+// Auth card component
+function AuthCard({ isLogin, setIsLogin, formData, setFormData, handleAuthSubmit, handleGoogleAuth, selectedPlan, loading }) {
   return (
-    <motion.div key="dog" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-md w-full">
-      <div className="bg-zinc-950 border border-white/10 rounded-[2.5rem] overflow-hidden backdrop-blur-3xl shadow-2xl">
-        <div className="bg-white/5 px-6 py-3 border-b border-white/5 flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-emerald-500">System Link Active</span>
-          </div>
-          <span className="text-[10px] font-mono text-zinc-500">ID: UNIT_K9_PRO</span>
-        </div>
-
-        <div className="p-8">
-          <div className="relative group mb-8">
-            <div className="absolute inset-0 z-10 pointer-events-none overflow-hidden rounded-3xl">
-              <motion.div 
-                initial={{ top: "-10%" }}
-                animate={{ top: "110%" }}
-                transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-                className="w-full h-[2px] bg-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.8)] relative"
-              />
-            </div>
-
-            <div className="bg-gradient-to-b from-zinc-900 to-black p-6 rounded-3xl border border-white/5 relative overflow-hidden">
-              <Image
-                src={dogImage}
-                width={200}
-                height={200}
-                alt="robotic unit"
-                className="mx-auto drop-shadow-[0_0_30px_rgba(59,130,246,0.2)] grayscale group-hover:grayscale-0 transition-all duration-700"
-                unoptimized
-              />
-            </div>
-          </div>
-
-          <div className="text-center mb-6">
-            <h3 className="text-xl font-bold tracking-tight">Biometric Override Required</h3>
-            <p className="text-zinc-500 text-xs mt-2 leading-relaxed">
-              Enter the 6-digit encryption key dispatched to <br/>
-              <span className="text-zinc-300 font-medium">{formData.email}</span>.
-            </p>
-          </div>
-
-          <form onSubmit={handleDogCodeSubmit} className="space-y-4">
-            <input
-              value={dogCode}
-              onChange={e => setDogCode(e.target.value)}
-              maxLength={6}
-              placeholder="000000"
-              className="w-full p-4 rounded-2xl bg-black border border-white/10 text-center font-mono text-2xl tracking-[0.3em] text-blue-400 focus:outline-none focus:border-blue-500 transition-all"
-            />
-            {dogError && <p className="text-red-500 text-center text-xs">{dogError}</p>}
-            <button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-2xl transition-all">Verify</button>
-          </form>
-        </div>
+    <div className="bg-zinc-900/40 border border-white/10 p-10 rounded-[2.5rem] backdrop-blur-xl shadow-2xl">
+      <div className="text-center mb-8">
+        <h2 className="text-3xl font-bold mb-2 italic uppercase tracking-tighter">
+          {isLogin ? "Welcome Back" : "Initialize Account"}
+        </h2>
+        <p className="text-zinc-500 text-sm italic">Plan: {selectedPlan.tier}</p>
       </div>
-    </motion.div>
-  );
-}
 
-function LoadingScreen() {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-[#050505]">
-      <Loader2 className="animate-spin text-blue-500" size={48} />
+      <div className="flex justify-center mb-8">
+        <GoogleLogin onSuccess={handleGoogleAuth} theme="filled_black" shape="pill" />
+      </div>
+
+      <div className="relative flex items-center my-6">
+        <div className="flex-grow border-t border-white/5"></div>
+        <span className="mx-4 text-xs font-bold text-zinc-600 uppercase tracking-widest">Or continue with</span>
+        <div className="flex-grow border-t border-white/5"></div>
+      </div>
+
+      <form onSubmit={handleAuthSubmit} className="space-y-4">
+        {!isLogin && (
+          <div className="relative">
+            <User className="absolute left-4 top-3.5 text-zinc-500" size={18} />
+            <input
+              required
+              placeholder="Full Name"
+              className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-black/40 border border-white/5 focus:border-blue-500/50 outline-none transition-all placeholder:text-zinc-600"
+              onChange={e => setFormData({ ...formData, name: e.target.value })}
+            />
+          </div>
+        )}
+        <div className="relative">
+          <Mail className="absolute left-4 top-3.5 text-zinc-500" size={18} />
+          <input
+            required
+            type="email"
+            placeholder="Email Address"
+            className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-black/40 border border-white/5 focus:border-blue-500/50 outline-none transition-all placeholder:text-zinc-600"
+            onChange={e => setFormData({ ...formData, email: e.target.value })}
+          />
+        </div>
+        <div className="relative">
+          <Lock className="absolute left-4 top-3.5 text-zinc-500" size={18} />
+          <input
+            required
+            type="password"
+            placeholder="Password"
+            className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-black/40 border border-white/5 focus:border-blue-500/50 outline-none transition-all placeholder:text-zinc-600"
+            onChange={e => setFormData({ ...formData, password: e.target.value })}
+          />
+        </div>
+
+        <button
+          disabled={loading}
+          className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-2xl transition-all shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 group"
+        >
+          {loading ? <Loader2 className="animate-spin" /> : (
+            <>
+              {isLogin ? "Sign In" : "Create Account"}
+              <Zap size={16} className="group-hover:translate-x-1 transition-transform" />
+            </>
+          )}
+        </button>
+      </form>
+
+      <button
+        onClick={() => setIsLogin(!isLogin)}
+        className="mt-6 text-xs font-bold text-zinc-500 hover:text-white transition-colors w-full uppercase tracking-widest"
+      >
+        {isLogin ? "Need an account? Sign Up" : "Already registered? Log In"}
+      </button>
     </div>
   );
 }
 
+// Dog verification component
+function DogVerification({ formData, dogCode, setDogCode, dogError, handleDogCodeSubmit }) {
+  return (
+    <motion.div key="dog" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-md w-full">
+      <div className="bg-zinc-950 border border-white/10 rounded-[2.5rem] overflow-hidden backdrop-blur-3xl shadow-2xl">
+        <div className="bg-white/5 px-
