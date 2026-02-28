@@ -2,11 +2,19 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  User,
+  Building2,
+  Accessibility,
+  CheckCircle2,
+  Loader2,
+  ArrowLeft,
+} from "lucide-react";
 import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements } from "@stripe/react-stripe-js";
 import CheckoutForm from "../components/CheckoutForm";
-import { Loader2, CheckCircle2 } from "lucide-react";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL || "https://securesite-2fow.onrender.com";
@@ -29,8 +37,8 @@ function SignupFlow() {
   const router = useRouter();
 
   const [step, setStep] = useState(1);
-  const [mainPlan, setMainPlan] = useState("");
-  const [subPlan, setSubPlan] = useState("");
+  const [mainPlan, setMainPlan] = useState(null);
+  const [subPlan, setSubPlan] = useState(null);
   const [clientSecret, setClientSecret] = useState("");
   const [verificationCode, setVerificationCode] = useState("");
   const [loading, setLoading] = useState(false);
@@ -42,53 +50,40 @@ function SignupFlow() {
     password: "",
   });
 
-  /* ================= PAYMENT ================= */
+  useEffect(() => {
+    if (step === 6) {
+      setTimeout(() => router.push("/dashboard"), 2000);
+    }
+  }, [step]);
 
   const initPayment = async (email) => {
-    try {
-      setLoading(true);
+    const res = await fetch(`${API_BASE}/api/create-payment-intent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ planTier: mainPlan, email }),
+    });
 
-      const res = await fetch(`${API_BASE}/api/create-payment-intent`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          planTier: mainPlan,
-          email,
-        }),
-      });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message);
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
-
-      setClientSecret(data.clientSecret);
-      setStep(5);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+    setClientSecret(data.clientSecret);
+    setStep(4);
   };
-
-  /* ================= SIGNUP ================= */
 
   const handleSignup = async () => {
     try {
       setLoading(true);
-
       const res = await fetch(`${API_BASE}/api/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...formData,
-          planTier: mainPlan,
-        }),
+        body: JSON.stringify({ ...formData, planTier: mainPlan }),
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.message);
 
       if (mainPlan === "Individual") {
-        setStep(8);
+        setStep(6);
       } else {
         await initPayment(formData.email);
       }
@@ -99,166 +94,198 @@ function SignupFlow() {
     }
   };
 
-  /* ================= VERIFY CODE ================= */
-
   const verifyCode = async () => {
-    try {
-      setLoading(true);
+    const res = await fetch(`${API_BASE}/api/verify-code`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: formData.email,
+        code: verificationCode,
+      }),
+    });
 
-      const res = await fetch(`${API_BASE}/api/verify-code`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: formData.email,
-          code: verificationCode,
-        }),
-      });
+    const data = await res.json();
+    if (!res.ok) return setError(data.message);
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
-
-      setStep(8);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+    setStep(6);
   };
 
-  useEffect(() => {
-    if (step === 8) {
-      setTimeout(() => router.push("/dashboard"), 2000);
-    }
-  }, [step]);
-
   return (
-    <div className="min-h-screen bg-black text-white flex items-center justify-center p-6">
-      {/* STEP 1 - MAIN PLAN */}
-      {step === 1 && (
-        <div className="grid md:grid-cols-3 gap-6 max-w-4xl w-full">
-          {["Individual", "Business", "Disability"].map((plan) => (
-            <div
-              key={plan}
-              onClick={() => {
-                setMainPlan(plan);
-                if (plan === "Individual") setStep(2);
-                else setStep(3);
-              }}
-              className="bg-zinc-900 p-8 rounded-3xl border border-zinc-800 cursor-pointer hover:scale-105 transition"
+    <div className="min-h-screen bg-gradient-to-br from-black via-zinc-950 to-black text-white flex items-center justify-center p-6">
+      <AnimatePresence mode="wait">
+
+        {/* STEP 1 - MAIN PLANS */}
+        {step === 1 && (
+          <motion.div
+            key="main"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="grid md:grid-cols-3 gap-6 max-w-5xl w-full"
+          >
+            {[
+              { name: "Individual", icon: <User /> },
+              { name: "Business", icon: <Building2 /> },
+              { name: "Disability", icon: <Accessibility /> },
+            ].map((plan) => (
+              <div
+                key={plan.name}
+                onClick={() => {
+                  setMainPlan(plan.name);
+                  setStep(2);
+                }}
+                className="bg-zinc-900/70 border border-zinc-800 p-10 rounded-3xl cursor-pointer hover:scale-105 transition"
+              >
+                {plan.icon}
+                <h3 className="text-2xl font-bold mt-4">{plan.name}</h3>
+                <p className="text-zinc-400 mt-2">
+                  Premium protection tailored for {plan.name.toLowerCase()}.
+                </p>
+              </div>
+            ))}
+          </motion.div>
+        )}
+
+        {/* STEP 2 - PLAN DETAILS */}
+        {step === 2 && (
+          <motion.div
+            key="details"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="bg-zinc-900/80 border border-zinc-800 p-10 rounded-3xl max-w-lg w-full"
+          >
+            <button
+              onClick={() => setStep(1)}
+              className="flex items-center gap-2 text-zinc-400 mb-6"
             >
-              <h2 className="text-2xl font-bold">{plan}</h2>
-            </div>
-          ))}
-        </div>
-      )}
+              <ArrowLeft size={16} /> Back
+            </button>
 
-      {/* STEP 2 - INDIVIDUAL SUB PLANS */}
-      {step === 2 && (
-        <div className="grid md:grid-cols-3 gap-6">
-          {["Free", "Pro", "Plus"].map((p) => (
-            <div
-              key={p}
-              onClick={() => {
-                setSubPlan(p);
-                setStep(4);
-              }}
-              className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800 cursor-pointer"
+            {mainPlan === "Individual" ? (
+              <>
+                <h2 className="text-2xl font-bold mb-6">
+                  Choose Individual Plan
+                </h2>
+                {["Free", "Pro", "Plus"].map((p) => (
+                  <div
+                    key={p}
+                    onClick={() => {
+                      setSubPlan(p);
+                      setStep(3);
+                    }}
+                    className="border border-zinc-700 p-4 rounded-xl mb-4 cursor-pointer hover:bg-zinc-800"
+                  >
+                    <h3 className="font-semibold">{p}</h3>
+                  </div>
+                ))}
+              </>
+            ) : (
+              <>
+                <h2 className="text-3xl font-bold">{mainPlan} Plan</h2>
+                <p className="text-4xl font-black mt-4">
+                  {mainPlan === "Business" ? "$49/mo" : "$25/mo"}
+                </p>
+                <ul className="mt-6 space-y-2 text-zinc-400">
+                  <li>✔ Advanced protection</li>
+                  <li>✔ AI monitoring</li>
+                  <li>✔ Priority support</li>
+                </ul>
+                <button
+                  onClick={() => setStep(3)}
+                  className="mt-8 w-full bg-blue-600 p-3 rounded-xl"
+                >
+                  Continue
+                </button>
+              </>
+            )}
+          </motion.div>
+        )}
+
+        {/* STEP 3 - AUTH */}
+        {step === 3 && (
+          <motion.div
+            key="auth"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="bg-zinc-900/80 border border-zinc-800 p-10 rounded-3xl max-w-md w-full"
+          >
+            <h2 className="text-2xl font-bold mb-6">Create Account</h2>
+
+            <div className="flex justify-center mb-6">
+              <GoogleLogin
+                onSuccess={() => alert("Hook Google logic here")}
+                onError={() => setError("Google failed")}
+              />
+            </div>
+
+            <div className="text-center text-zinc-500 mb-4">OR</div>
+
+            <input
+              placeholder="Name"
+              className="w-full p-3 mb-3 bg-black border border-zinc-800 rounded"
+              onChange={(e) =>
+                setFormData({ ...formData, name: e.target.value })
+              }
+            />
+            <input
+              placeholder="Email"
+              className="w-full p-3 mb-3 bg-black border border-zinc-800 rounded"
+              onChange={(e) =>
+                setFormData({ ...formData, email: e.target.value })
+              }
+            />
+            <input
+              type="password"
+              placeholder="Password"
+              className="w-full p-3 mb-3 bg-black border border-zinc-800 rounded"
+              onChange={(e) =>
+                setFormData({ ...formData, password: e.target.value })
+              }
+            />
+
+            {error && <p className="text-red-500 text-sm">{error}</p>}
+
+            <button
+              onClick={handleSignup}
+              disabled={loading}
+              className="w-full bg-blue-600 p-3 rounded-xl"
             >
-              <h3 className="text-xl">{p}</h3>
-            </div>
-          ))}
-        </div>
-      )}
+              {loading ? <Loader2 className="animate-spin mx-auto" /> : "Sign Up"}
+            </button>
+          </motion.div>
+        )}
 
-      {/* STEP 3 - BUSINESS / DISABILITY CARD */}
-      {step === 3 && (
-        <div className="bg-zinc-900 p-10 rounded-3xl border border-zinc-800 text-center">
-          <h2 className="text-3xl font-bold">{mainPlan} Plan</h2>
-          <p className="mt-4">
-            {mainPlan === "Business" ? "$49/month" : "$25/month"}
-          </p>
-          <button
-            onClick={() => setStep(4)}
-            className="mt-6 bg-blue-600 px-6 py-3 rounded-xl"
-          >
-            Continue
-          </button>
-        </div>
-      )}
+        {/* STEP 4 - STRIPE */}
+        {step === 4 && clientSecret && (
+          <Elements stripe={stripePromise} options={{ clientSecret }}>
+            <CheckoutForm onSuccess={() => setStep(5)} />
+          </Elements>
+        )}
 
-      {/* STEP 4 - SIGNUP */}
-      {step === 4 && (
-        <div className="bg-zinc-900 p-8 rounded-3xl border border-zinc-800 w-96">
-          <h2 className="text-xl font-bold mb-6">Create Account</h2>
+        {/* STEP 5 - VERIFY */}
+        {step === 5 && (
+          <div className="bg-zinc-900 p-8 rounded-3xl text-center">
+            <h2 className="text-xl mb-4">Enter Verification Code</h2>
+            <input
+              className="p-3 bg-black border border-zinc-800 rounded"
+              onChange={(e) => setVerificationCode(e.target.value)}
+            />
+            <button
+              onClick={verifyCode}
+              className="mt-4 bg-blue-600 px-6 py-3 rounded"
+            >
+              Verify
+            </button>
+          </div>
+        )}
 
-          <input
-            placeholder="Name"
-            className="w-full p-3 mb-3 bg-black border border-zinc-800 rounded"
-            onChange={(e) =>
-              setFormData({ ...formData, name: e.target.value })
-            }
-          />
-          <input
-            placeholder="Email"
-            className="w-full p-3 mb-3 bg-black border border-zinc-800 rounded"
-            onChange={(e) =>
-              setFormData({ ...formData, email: e.target.value })
-            }
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            className="w-full p-3 mb-3 bg-black border border-zinc-800 rounded"
-            onChange={(e) =>
-              setFormData({ ...formData, password: e.target.value })
-            }
-          />
-
-          <button
-            onClick={handleSignup}
-            disabled={loading}
-            className="w-full bg-blue-600 p-3 rounded"
-          >
-            {loading ? <Loader2 className="animate-spin mx-auto" /> : "Sign Up"}
-          </button>
-
-          {error && <p className="text-red-500 mt-4">{error}</p>}
-        </div>
-      )}
-
-      {/* STEP 5 - STRIPE */}
-      {step === 5 && clientSecret && (
-        <Elements stripe={stripePromise} options={{ clientSecret }}>
-          <CheckoutForm
-            onSuccess={() => setStep(6)}
-          />
-        </Elements>
-      )}
-
-      {/* STEP 6 - SHOW CODE INPUT */}
-      {step === 6 && (
-        <div className="bg-zinc-900 p-8 rounded-3xl text-center">
-          <h2 className="text-xl mb-4">Enter Verification Code</h2>
-          <input
-            className="p-3 bg-black border border-zinc-800 rounded"
-            onChange={(e) => setVerificationCode(e.target.value)}
-          />
-          <button
-            onClick={verifyCode}
-            className="block mt-4 bg-blue-600 px-6 py-3 rounded"
-          >
-            Verify
-          </button>
-        </div>
-      )}
-
-      {/* STEP 8 - SUCCESS */}
-      {step === 8 && (
-        <div className="text-center">
-          <CheckCircle2 size={80} className="text-green-500 mx-auto" />
-          <h2 className="text-3xl mt-4">Access Granted</h2>
-        </div>
-      )}
+        {/* STEP 6 - SUCCESS */}
+        {step === 6 && (
+          <div className="text-center">
+            <CheckCircle2 size={100} className="text-green-500 mx-auto" />
+            <h2 className="text-4xl font-bold mt-6">Access Granted</h2>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
