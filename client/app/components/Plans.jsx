@@ -2,45 +2,49 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, Zap, Building2, GraduationCap, User, ShieldCheck } from "lucide-react";
+import { Check, Zap, Building2, User, ShieldCheck } from "lucide-react";
 
 const plans = [
   {
-    id: "free",
-    tier: "Free",
+    id: "individual",
+    tier: "Individual",
     price: "$0",
     icon: <User size={32} />,
     color: "#3b82f6",
-    benefits: ["SMS Link Scanning", "Manual Reporting", "Basic Filter"],
-  },
-  {
-    id: "premium",
-    tier: "Premium",
-    price: "$9",
-    icon: <Zap size={32} />,
-    color: "#06b6d4",
-    benefits: ["Call Detection", "Phishing Auto-Block", "24/7 Priority"],
+    benefits: [
+      "Basic Scam Alerts",
+      "Manual Reporting",
+      "Limited Dashboard Access"
+    ],
   },
   {
     id: "business",
     tier: "Business",
-    price: "$49",
+    price: "$3000",
     icon: <Building2 size={32} />,
     color: "#6366f1",
-    benefits: ["Team Training", "Admin Dashboard", "API Access"],
+    benefits: [
+      "Robotic Dog Deployment",
+      "Enterprise Dashboard",
+      "Monitoring & Reports"
+    ],
   },
   {
-    id: "lab",
-    tier: "Lab",
-    price: "$25",
-    icon: <GraduationCap size={32} />,
-    color: "#a855f7",
-    benefits: ["Campus Defense", "Workshops", "Research Proxy"],
+    id: "accessibility",
+    tier: "Accessibility & Disability",
+    price: "$500",
+    icon: <Zap size={32} />,
+    color: "#10b981",
+    benefits: [
+      "Support for Disabled Users",
+      "Social Impact Partnership",
+      "Affordable Protection Model"
+    ],
   },
 ];
 
 export default function PlansRadial() {
-  const [activeTab, setActiveTab] = useState(plans[1]);
+  const [activeTab, setActiveTab] = useState(plans[0]);
   const router = useRouter();
 
   const handlePlanSelection = () => {
@@ -49,7 +53,8 @@ export default function PlansRadial() {
 
   return (
     <section id="plans" className="relative py-20 md:py-32 bg-[#020202] min-h-screen flex items-center justify-center overflow-hidden">
-      {/* Background Glow - Responsive size */}
+      
+      {/* Background Glow */}
       <div 
         className="absolute w-[300px] h-[300px] md:w-[600px] md:h-[600px] rounded-full opacity-20 blur-[80px] md:blur-[120px] transition-colors duration-1000"
         style={{ backgroundColor: activeTab.color }}
@@ -57,9 +62,9 @@ export default function PlansRadial() {
 
       <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center z-10">
         
-        {/* LEFT: THE INTERACTIVE HUB */}
+        {/* LEFT: RADIAL HUB */}
         <div className="relative flex items-center justify-center h-[350px] md:h-[500px] order-2 lg:order-1">
-          {/* Inner Circles - Scaled for mobile */}
+          
           <div className="absolute w-[200px] h-[200px] md:w-[350px] md:h-[350px] border border-white/5 rounded-full" />
           
           <motion.div 
@@ -68,18 +73,19 @@ export default function PlansRadial() {
             className="absolute w-[280px] h-[280px] md:w-[450px] md:h-[450px] border border-dashed border-blue-500/20 rounded-full"
           />
 
-          {/* Central Shield Icon */}
+          {/* Center Shield */}
           <div className="relative z-20 bg-black p-5 md:p-8 rounded-full border-4 border-white/10 shadow-[0_0_50px_rgba(255,255,255,0.05)]">
-             <ShieldCheck size={40} md={64} style={{ color: activeTab.color }} className="transition-colors duration-500" />
+            <ShieldCheck size={40} style={{ color: activeTab.color }} className="transition-colors duration-500" />
           </div>
 
-          {/* Radial Plan Buttons */}
+          {/* Radial Buttons */}
           {plans.map((plan, i) => {
             const angle = (i * 360) / plans.length;
             const isActive = activeTab.id === plan.id;
-            
-            // Dynamic Radius: Smaller on mobile (120px) vs Desktop (200px)
-            const radius = typeof window !== "undefined" && window.innerWidth < 768 ? 120 : 200;
+            const radius =
+              typeof window !== "undefined" && window.innerWidth < 768
+                ? 120
+                : 200;
 
             return (
               <motion.button
@@ -92,19 +98,23 @@ export default function PlansRadial() {
                   scale: isActive ? 1.1 : 0.9,
                 }}
                 className={`absolute p-3 md:p-5 rounded-xl md:rounded-2xl border-2 transition-all duration-500 ${
-                  isActive 
-                  ? "bg-white text-black border-white shadow-[0_0_20px_white]" 
-                  : "bg-black text-white border-white/10 hover:border-white/30"
+                  isActive
+                    ? "bg-white text-black border-white shadow-[0_0_20px_white]"
+                    : "bg-black text-white border-white/10 hover:border-white/30"
                 }`}
               >
-                {/* Responsive icon sizes */}
-                {React.cloneElement(plan.icon, { size: typeof window !== "undefined" && window.innerWidth < 768 ? 20 : 32 })}
+                {React.cloneElement(plan.icon, {
+                  size:
+                    typeof window !== "undefined" && window.innerWidth < 768
+                      ? 20
+                      : 32,
+                })}
               </motion.button>
             );
           })}
         </div>
 
-        {/* RIGHT: DYNAMIC CONTENT AREA */}
+        {/* RIGHT: CONTENT */}
         <div className="min-h-[350px] md:h-[400px] flex flex-col justify-center text-center lg:text-left order-1 lg:order-2">
           <AnimatePresence mode="wait">
             <motion.div
@@ -118,17 +128,22 @@ export default function PlansRadial() {
               <span className="text-blue-500 font-mono font-black tracking-widest uppercase text-xs md:text-sm">
                 {activeTab.tier} Security Tier
               </span>
+
               <h3 className="text-5xl md:text-7xl font-black text-white tracking-tighter">
                 {activeTab.price}
-                <span className="text-lg md:text-xl text-gray-500 font-normal">/month</span>
+                <span className="text-lg md:text-xl text-gray-500 font-normal">
+                  /month
+                </span>
               </h3>
+
               <p className="text-gray-400 text-sm md:text-lg max-w-md mx-auto lg:mx-0 italic leading-relaxed">
-                Our {activeTab.tier} shield provides robust coverage tailored for {activeTab.id === 'lab' ? 'security laboratories' : 'your digital safety'}.
+                Our {activeTab.tier} shield provides robust coverage tailored
+                for your digital safety.
               </p>
-              
+
               <ul className="grid grid-cols-1 gap-3 md:gap-4 pt-4 justify-items-center lg:justify-items-start">
                 {activeTab.benefits.map((benefit, i) => (
-                  <motion.li 
+                  <motion.li
                     key={i}
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
@@ -144,18 +159,19 @@ export default function PlansRadial() {
               </ul>
 
               <div className="pt-6">
-                <button 
+                <button
                   onClick={handlePlanSelection}
                   className="w-full md:w-auto px-8 md:px-12 py-3 md:py-4 rounded-xl font-black transition-all hover:scale-105 active:scale-95 text-sm md:text-base"
-                  style={{ 
-                    backgroundColor: activeTab.color, 
-                    color: 'white',
-                    boxShadow: `0 10px 30px -10px ${activeTab.color}80` 
+                  style={{
+                    backgroundColor: activeTab.color,
+                    color: "white",
+                    boxShadow: `0 10px 30px -10px ${activeTab.color}80`,
                   }}
                 >
-                  Deploy {activeTab.tier} Shield
+                  Partnership With Us
                 </button>
               </div>
+
             </motion.div>
           </AnimatePresence>
         </div>
