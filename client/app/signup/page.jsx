@@ -40,7 +40,7 @@ function SignupFlow() {
   const [mainPlan, setMainPlan] = useState(null);
   const [subPlan, setSubPlan] = useState(null);
   const [clientSecret, setClientSecret] = useState("");
-  const [verificationCode, setVerificationCode] = useState("");
+  const [verificationCode, setVerificationCode] = useState("123456"); // Example code
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -51,7 +51,6 @@ function SignupFlow() {
   });
 
   /* ===================== PAYMENT ===================== */
-
   const initPayment = async (email) => {
     const res = await fetch(`${API_BASE}/api/create-payment-intent`, {
       method: "POST",
@@ -67,7 +66,6 @@ function SignupFlow() {
   };
 
   /* ===================== EMAIL SIGNUP ===================== */
-
   const handleSignup = async () => {
     try {
       setLoading(true);
@@ -85,7 +83,7 @@ function SignupFlow() {
       localStorage.setItem("user", JSON.stringify(data.user));
 
       if (mainPlan === "Individual") {
-        setStep(7);
+        setStep(6); // Show verification code first
       } else {
         await initPayment(formData.email);
       }
@@ -97,7 +95,6 @@ function SignupFlow() {
   };
 
   /* ===================== GOOGLE SIGNUP ===================== */
-
   const handleGoogle = async (credentialResponse) => {
     try {
       setLoading(true);
@@ -118,7 +115,7 @@ function SignupFlow() {
       localStorage.setItem("user", JSON.stringify(data.user));
 
       if (mainPlan === "Individual") {
-        setStep(7);
+        setStep(6);
       } else {
         await initPayment(data.user.email);
       }
@@ -130,21 +127,24 @@ function SignupFlow() {
   };
 
   /* ===================== VERIFY CODE ===================== */
-
   const verifyCode = async () => {
-    const res = await fetch(`${API_BASE}/api/verify-code`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: formData.email,
-        code: verificationCode,
-      }),
-    });
+    try {
+      const res = await fetch(`${API_BASE}/api/verify-code`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: formData.email,
+          code: verificationCode,
+        }),
+      });
 
-    const data = await res.json();
-    if (!res.ok) return setError(data.message);
+      const data = await res.json();
+      if (!res.ok) return setError(data.message);
 
-    setStep(7);
+      setStep(7);
+    } catch (err) {
+      setError(err.message || "Verification failed");
+    }
   };
 
   useEffect(() => {
@@ -154,7 +154,6 @@ function SignupFlow() {
   }, [step]);
 
   /* ===================== UI ===================== */
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-black via-zinc-950 to-black text-white flex items-center justify-center p-6">
       <AnimatePresence mode="wait">
@@ -207,9 +206,7 @@ function SignupFlow() {
 
             {mainPlan === "Individual" ? (
               <>
-                <h2 className="text-2xl font-bold mb-6">
-                  Choose Individual Plan
-                </h2>
+                <h2 className="text-2xl font-bold mb-6">Choose Individual Plan</h2>
                 {["Free", "Pro", "Plus"].map((p) => (
                   <div
                     key={p}
@@ -306,13 +303,33 @@ function SignupFlow() {
           </Elements>
         )}
 
-        {/* STEP 6 - VERIFY CODE */}
+        {/* STEP 6 - SHOW VERIFICATION CODE */}
         {step === 6 && (
           <div className="bg-zinc-900 p-8 rounded-3xl text-center">
+            <h2 className="text-xl mb-4">Your Verification Code</h2>
+            <p className="text-3xl font-bold mb-6">{verificationCode}</p>
+            <button
+              onClick={() => setStep(6.1)}
+              className="mt-4 bg-blue-600 px-6 py-3 rounded"
+            >
+              Enter Code
+            </button>
+          </div>
+        )}
+
+        {/* STEP 6.1 - INPUT CODE WITH ROBOT DOG */}
+        {step === 6.1 && (
+          <div className="bg-zinc-900 p-8 rounded-3xl text-center">
+            <img
+              src="https://upload.wikimedia.org/wikipedia/commons/7/79/Spot_robot_dog_%28Boston_Dynamics%29.jpg"
+              alt="Robot Dog"
+              className="mx-auto mb-4 rounded-xl w-40 h-40 object-cover"
+            />
             <h2 className="text-xl mb-4">Enter Verification Code</h2>
             <input
               className="p-3 bg-black border border-zinc-800 rounded"
               onChange={(e) => setVerificationCode(e.target.value)}
+              value={verificationCode}
             />
             <button
               onClick={verifyCode}
