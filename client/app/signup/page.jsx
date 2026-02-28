@@ -8,8 +8,8 @@ import {
   Building2,
   Accessibility,
   CheckCircle2,
-  Loader2,
   ArrowLeft,
+  Loader2,
 } from "lucide-react";
 import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
 import { loadStripe } from "@stripe/stripe-js";
@@ -50,11 +50,7 @@ function SignupFlow() {
     password: "",
   });
 
-  useEffect(() => {
-    if (step === 6) {
-      setTimeout(() => router.push("/dashboard"), 2000);
-    }
-  }, [step]);
+  /* ===================== PAYMENT ===================== */
 
   const initPayment = async (email) => {
     const res = await fetch(`${API_BASE}/api/create-payment-intent`, {
@@ -67,12 +63,16 @@ function SignupFlow() {
     if (!res.ok) throw new Error(data.message);
 
     setClientSecret(data.clientSecret);
-    setStep(4);
+    setStep(5);
   };
+
+  /* ===================== EMAIL SIGNUP ===================== */
 
   const handleSignup = async () => {
     try {
       setLoading(true);
+      setError("");
+
       const res = await fetch(`${API_BASE}/api/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -82,8 +82,10 @@ function SignupFlow() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message);
 
+      localStorage.setItem("user", JSON.stringify(data.user));
+
       if (mainPlan === "Individual") {
-        setStep(6);
+        setStep(7);
       } else {
         await initPayment(formData.email);
       }
@@ -93,6 +95,41 @@ function SignupFlow() {
       setLoading(false);
     }
   };
+
+  /* ===================== GOOGLE SIGNUP ===================== */
+
+  const handleGoogle = async (credentialResponse) => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const res = await fetch(`${API_BASE}/api/google-login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token: credentialResponse.credential,
+          planTier: mainPlan,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message);
+
+      localStorage.setItem("user", JSON.stringify(data.user));
+
+      if (mainPlan === "Individual") {
+        setStep(7);
+      } else {
+        await initPayment(data.user.email);
+      }
+    } catch (err) {
+      setError(err.message || "Google failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /* ===================== VERIFY CODE ===================== */
 
   const verifyCode = async () => {
     const res = await fetch(`${API_BASE}/api/verify-code`, {
@@ -107,8 +144,16 @@ function SignupFlow() {
     const data = await res.json();
     if (!res.ok) return setError(data.message);
 
-    setStep(6);
+    setStep(7);
   };
+
+  useEffect(() => {
+    if (step === 7) {
+      setTimeout(() => router.push("/dashboard"), 2000);
+    }
+  }, [step]);
+
+  /* ===================== UI ===================== */
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-black via-zinc-950 to-black text-white flex items-center justify-center p-6">
@@ -123,9 +168,9 @@ function SignupFlow() {
             className="grid md:grid-cols-3 gap-6 max-w-5xl w-full"
           >
             {[
-              { name: "Individual", icon: <User /> },
-              { name: "Business", icon: <Building2 /> },
-              { name: "Disability", icon: <Accessibility /> },
+              { name: "Individual", icon: <User size={28} /> },
+              { name: "Business", icon: <Building2 size={28} /> },
+              { name: "Disability", icon: <Accessibility size={28} /> },
             ].map((plan) => (
               <div
                 key={plan.name}
@@ -138,7 +183,7 @@ function SignupFlow() {
                 {plan.icon}
                 <h3 className="text-2xl font-bold mt-4">{plan.name}</h3>
                 <p className="text-zinc-400 mt-2">
-                  Premium protection tailored for {plan.name.toLowerCase()}.
+                  Tailored protection for {plan.name.toLowerCase()} users.
                 </p>
               </div>
             ))}
@@ -185,8 +230,8 @@ function SignupFlow() {
                   {mainPlan === "Business" ? "$49/mo" : "$25/mo"}
                 </p>
                 <ul className="mt-6 space-y-2 text-zinc-400">
-                  <li>✔ Advanced protection</li>
                   <li>✔ AI monitoring</li>
+                  <li>✔ Real-time protection</li>
                   <li>✔ Priority support</li>
                 </ul>
                 <button
@@ -212,7 +257,7 @@ function SignupFlow() {
 
             <div className="flex justify-center mb-6">
               <GoogleLogin
-                onSuccess={() => alert("Hook Google logic here")}
+                onSuccess={handleGoogle}
                 onError={() => setError("Google failed")}
               />
             </div>
@@ -254,15 +299,15 @@ function SignupFlow() {
           </motion.div>
         )}
 
-        {/* STEP 4 - STRIPE */}
-        {step === 4 && clientSecret && (
+        {/* STEP 5 - STRIPE */}
+        {step === 5 && clientSecret && (
           <Elements stripe={stripePromise} options={{ clientSecret }}>
-            <CheckoutForm onSuccess={() => setStep(5)} />
+            <CheckoutForm onSuccess={() => setStep(6)} />
           </Elements>
         )}
 
-        {/* STEP 5 - VERIFY */}
-        {step === 5 && (
+        {/* STEP 6 - VERIFY CODE */}
+        {step === 6 && (
           <div className="bg-zinc-900 p-8 rounded-3xl text-center">
             <h2 className="text-xl mb-4">Enter Verification Code</h2>
             <input
@@ -278,8 +323,8 @@ function SignupFlow() {
           </div>
         )}
 
-        {/* STEP 6 - SUCCESS */}
-        {step === 6 && (
+        {/* STEP 7 - SUCCESS */}
+        {step === 7 && (
           <div className="text-center">
             <CheckCircle2 size={100} className="text-green-500 mx-auto" />
             <h2 className="text-4xl font-bold mt-6">Access Granted</h2>
