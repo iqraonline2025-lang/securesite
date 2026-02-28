@@ -20,7 +20,7 @@ const app = express();
 // -------------------------
 const allowedOrigins = [
   "http://localhost:3000",
-  "https://securesite-9.onrender.com" // your static frontend
+  "https://securesite-11.onrender.com" // your static frontend
 ];
 
 app.use(cors({
