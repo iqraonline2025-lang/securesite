@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, Suspense } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   User,
@@ -23,10 +23,6 @@ const API_BASE =
 const stripePromise = loadStripe(
   process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || ""
 );
-
-/* =======================
-   PLAN CARDS
-======================= */
 
 const PLANS = [
   {
@@ -84,7 +80,6 @@ function SignupContent() {
     name: "",
     email: "",
     password: "",
-    verificationCode: "",
   });
 
   /* =======================
@@ -103,9 +98,11 @@ function SignupContent() {
      INIT PAYMENT
   ======================= */
 
-  const initPayment = async (tier: string, email: string) => {
+  const initPayment = async (tier, email) => {
     try {
       setLoading(true);
+      setError("");
+
       const res = await fetch(`${API_BASE}/api/create-payment-intent`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -117,18 +114,18 @@ function SignupContent() {
 
       setClientSecret(data.clientSecret);
       setStep(3);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(err.message || "Payment error");
     } finally {
       setLoading(false);
     }
   };
 
   /* =======================
-     GOOGLE AUTH (FIXED)
+     GOOGLE AUTH
   ======================= */
 
-  const handleGoogleAuth = async (cred: any) => {
+  const handleGoogleAuth = async (cred) => {
     try {
       setLoading(true);
       setError("");
@@ -152,7 +149,7 @@ function SignupContent() {
       } else {
         await initPayment(selectedPlan.tier, data.user.email);
       }
-    } catch (err: any) {
+    } catch (err) {
       setError(err.message || "Google login failed");
     } finally {
       setLoading(false);
@@ -163,7 +160,7 @@ function SignupContent() {
      EMAIL SIGNUP
   ======================= */
 
-  const handleSignup = async (e: any) => {
+  const handleSignup = async (e) => {
     e.preventDefault();
 
     try {
@@ -189,8 +186,8 @@ function SignupContent() {
       } else {
         await initPayment(selectedPlan.tier, formData.email);
       }
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(err.message || "Signup failed");
     } finally {
       setLoading(false);
     }
@@ -204,7 +201,7 @@ function SignupContent() {
     <div className="min-h-screen bg-gradient-to-br from-black via-zinc-950 to-black text-white flex items-center justify-center p-6">
       <AnimatePresence mode="wait">
 
-        {/* STEP 1 - PLANS */}
+        {/* STEP 1 - PLAN SELECT */}
         {step === 1 && (
           <motion.div
             key="plans"
@@ -219,7 +216,7 @@ function SignupContent() {
                   setSelectedPlan(plan);
                   setStep(2);
                 }}
-                className="bg-zinc-900/70 backdrop-blur-xl border border-zinc-800 p-8 rounded-3xl cursor-pointer hover:scale-105 transition-all"
+                className="bg-zinc-900/70 border border-zinc-800 p-8 rounded-3xl cursor-pointer hover:scale-105 transition-all"
               >
                 {plan.icon}
                 <h3 className="text-xl font-bold mt-4">{plan.tier}</h3>
@@ -236,7 +233,7 @@ function SignupContent() {
             key="auth"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="bg-zinc-900/80 backdrop-blur-xl border border-zinc-800 p-10 rounded-3xl max-w-md w-full"
+            className="bg-zinc-900/80 border border-zinc-800 p-10 rounded-3xl max-w-md w-full"
           >
             <button
               onClick={() => setStep(1)}
@@ -308,7 +305,7 @@ function SignupContent() {
         {step === 3 && clientSecret && (
           <Elements stripe={stripePromise} options={{ clientSecret }}>
             <CheckoutForm
-              onSuccess={(user: any) => {
+              onSuccess={(user) => {
                 localStorage.setItem("user", JSON.stringify(user));
                 setStep(6);
               }}
