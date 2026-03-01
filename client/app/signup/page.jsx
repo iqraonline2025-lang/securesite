@@ -40,13 +40,12 @@ const fader = {
 };
 
 export default function SignupPage() {
-  const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     setIsMounted(true);
-    const session = localStorage.getItem("vault_session_active");
-    if (session === "true") {
+    if (localStorage.getItem("vault_session_active") === "true") {
       router.replace("/dashboard");
     }
   }, [router]);
@@ -75,26 +74,27 @@ function SignupFlow() {
   const [dogCode, setDogCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [formData, setFormData] = useState({ email: "", password: "" });
+  const [formData, setFormData] = useState({ email: "" });
 
-  const generateCode = () => {
+  const startVerification = () => {
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     setGeneratedCode(code);
-    setStep(5);
+    setStep(5); // Show the code issued screen
     setLoading(false);
   };
 
-  const handleAuthSuccess = async (email) => {
+  const handleAuthSubmit = async (email) => {
     setLoading(true);
     setError("");
+    setFormData({ email });
 
-    // 1. Logic for Login or Free Plans
+    // If Login OR Free Plan, go straight to code
     if (isLoginMode || (selectedPlan && selectedPlan.price === 0)) {
-      generateCode();
+      startVerification();
       return;
     }
 
-    // 2. Logic for Paid Signup
+    // If Paid Plan, get Stripe Secret
     try {
       const res = await fetch(`${API_BASE}/api/auth/create-payment-intent`, {
         method: "POST",
@@ -108,9 +108,9 @@ function SignupFlow() {
       const data = await res.json();
       if (res.ok && data.clientSecret) {
         setClientSecret(data.clientSecret);
-        setStep(4);
+        setStep(4); // Go to Stripe
       } else {
-        throw new Error(data.message || "Initialization failed");
+        throw new Error(data.message || "Stripe Init Failed");
       }
     } catch (err) {
       setError(err.message);
@@ -119,146 +119,117 @@ function SignupFlow() {
     }
   };
 
-  const handleFinalRedirect = () => {
+  const handleFinalVerify = () => {
     if (dogCode === generatedCode) {
       setLoading(true);
       localStorage.setItem("vault_session_active", "true");
-      setStep(7);
-      setTimeout(() => router.push("/dashboard"), 1500);
+      setStep(7); // Success Screen
+      setTimeout(() => router.push("/dashboard"), 2000);
     } else {
-      setError("CRITICAL_ERR: AUTH_KEY_MISMATCH");
+      setError("AUTH_KEY_INVALID");
     }
   };
 
   return (
     <div className="relative flex items-center justify-center min-h-screen p-6">
-      {/* Background UI elements */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-blue-600/10 blur-[150px] rounded-full opacity-50 translate-x-1/2 -translate-y-1/2" />
-        <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-purple-600/10 blur-[150px] rounded-full opacity-30 -translate-x-1/2 translate-y-1/2" />
-      </div>
-
       <div className="w-full max-w-6xl relative z-10">
         <AnimatePresence mode="wait">
           
+          {/* STEP 1: Select User Type */}
           {step === 1 && (
             <motion.div key="s1" variants={fader} initial="initial" animate="animate" exit="exit" className="grid md:grid-cols-3 gap-6">
               {USER_TYPES.map((type) => (
-                <motion.div 
-                  key={type.id} 
-                  whileHover={{ y: -8, backgroundColor: "rgba(39, 39, 42, 0.4)" }} 
-                  onClick={() => { setUserType(type.id); setStep(2); }}
-                  className="cursor-pointer bg-zinc-900/20 backdrop-blur-xl border border-white/10 p-12 rounded-[3.5rem] group text-center transition-all duration-300 shadow-2xl"
-                >
-                  <type.icon size={52} className="mx-auto mb-8 text-blue-500 group-hover:scale-110 transition-all" />
-                  <h2 className="text-2xl font-black italic uppercase tracking-tighter mb-2">{type.label}</h2>
-                  <p className="text-zinc-500 text-[10px] font-mono uppercase tracking-[0.3em]">{type.desc}</p>
-                </motion.div>
-              ))}
-            </motion.div>
-          )}
-
-          {step === 2 && (
-            <motion.div key="s2" variants={fader} initial="initial" animate="animate" exit="exit" className="flex flex-wrap justify-center gap-6">
-              {PLANS.filter(p => p.category === userType).map((plan) => (
-                <div key={plan.id} onClick={() => { setSelectedPlan(plan); setStep(3); }}
-                  className="w-full max-w-[340px] flex flex-col bg-zinc-900/30 backdrop-blur-3xl border border-white/5 p-10 rounded-[3.5rem] hover:border-blue-500/50 transition-all duration-500 cursor-pointer group shadow-2xl relative overflow-hidden min-h-[500px]"
-                >
-                  <h3 className="text-blue-400 font-black uppercase text-[10px] tracking-[0.3em] mb-4">{plan.tier}</h3>
-                  <div className="text-7xl font-black italic mb-10 tracking-tighter">{plan.display}</div>
-                  <div className="space-y-4 mb-10 flex-grow text-zinc-400 text-[13px]">
-                    {plan.features.map(f => (
-                      <div key={f} className="flex items-center gap-4">
-                        <CheckCircle2 size={16} className="text-blue-500 shrink-0" /> {f}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="relative h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                    <div className="absolute top-0 left-0 h-full w-14 bg-blue-600 group-hover:w-full transition-all duration-1000" />
-                  </div>
+                <div key={type.id} onClick={() => { setUserType(type.id); setStep(2); }}
+                  className="cursor-pointer bg-zinc-900/20 backdrop-blur-xl border border-white/10 p-12 rounded-[3.5rem] group text-center transition-all hover:bg-zinc-800/40">
+                  <type.icon size={52} className="mx-auto mb-8 text-blue-500 group-hover:scale-110 transition-transform" />
+                  <h2 className="text-2xl font-black italic uppercase tracking-tighter">{type.label}</h2>
+                  <p className="text-zinc-500 text-[10px] font-mono uppercase tracking-widest mt-2">{type.desc}</p>
                 </div>
               ))}
             </motion.div>
           )}
 
-          {step === 3 && (
-            <motion.div key="s3" variants={fader} initial="initial" animate="animate" exit="exit" className="max-w-md mx-auto w-full bg-zinc-950/80 backdrop-blur-3xl p-12 rounded-[4rem] border border-white/5 shadow-2xl text-center">
-               <h2 className="text-xl font-black italic uppercase mb-8 tracking-tighter">
-                 {isLoginMode ? "Secure Login" : "Initialize Protocol"}
-               </h2>
-               <div className="flex justify-center mb-10">
-                  <GoogleLogin 
-                    onSuccess={() => handleAuthSuccess("google_user")} 
-                    onError={() => setError("Google Auth Failed")}
-                  />
-               </div>
-               <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); handleAuthSuccess(formData.email); }}>
-                  <input type="email" required placeholder="EMAIL" className="w-full bg-black/60 border border-white/5 p-5 rounded-2xl outline-none focus:border-blue-500/50 transition-all font-mono text-xs" onChange={e => setFormData({...formData, email: e.target.value})} />
-                  <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-500 py-6 rounded-2xl font-black uppercase italic tracking-[0.3em] transition-all text-sm mt-4">
-                    {loading ? <Loader2 className="animate-spin mx-auto" /> : "CONTINUE"}
-                  </button>
-                  {error && <p className="text-red-500 text-center text-[10px] mt-4 uppercase font-bold">{error}</p>}
-               </form>
-               <button onClick={() => setIsLoginMode(!isLoginMode)} className="mt-8 text-[10px] uppercase font-bold tracking-widest text-zinc-500 hover:text-blue-400">
-                  {isLoginMode ? "Create Account" : "Secure Login"}
-               </button>
-            </motion.div>
-          )}
-
-          {step === 4 && clientSecret && (
-            <motion.div key="s4" variants={fader} initial="initial" animate="animate" exit="exit" className="max-w-md mx-auto w-full">
-              <div className="bg-[#080808] border border-blue-500/20 p-12 rounded-[4rem] shadow-2xl">
-                <Elements stripe={stripePromise} options={{ clientSecret, appearance: { theme: 'night' } }}>
-                  <CheckoutForm onSuccess={generateCode} />
-                </Elements>
-              </div>
-            </motion.div>
-          )}
-
-          {step === 5 && (
-            <motion.div key="s5" variants={fader} initial="initial" animate="animate" exit="exit" className="max-w-md mx-auto text-center">
-               <div className="bg-zinc-950/90 backdrop-blur-3xl p-14 rounded-[4rem] border border-white/5 shadow-3xl">
-                  <Cpu size={50} className="mx-auto mb-8 text-blue-500 animate-pulse" />
-                  <h2 className="text-2xl font-black uppercase italic mb-8">Encryption Issued</h2>
-                  <div className="bg-black/80 py-12 rounded-[2rem] border border-white/5 shadow-inner">
-                    <span className="text-5xl font-mono text-blue-400 tracking-[0.4em] font-black">{generatedCode}</span>
+          {/* STEP 2: Select Plan */}
+          {step === 2 && (
+            <motion.div key="s2" variants={fader} initial="initial" animate="animate" exit="exit" className="flex flex-wrap justify-center gap-6">
+              {PLANS.filter(p => p.category === userType).map((plan) => (
+                <div key={plan.id} onClick={() => { setSelectedPlan(plan); setStep(3); }}
+                  className="w-[320px] bg-zinc-900/40 border border-white/5 p-10 rounded-[3.5rem] hover:border-blue-500 transition-all cursor-pointer">
+                  <h3 className="text-blue-400 font-bold uppercase text-[10px] tracking-widest">{plan.tier}</h3>
+                  <div className="text-6xl font-black italic my-6 tracking-tighter">{plan.display}</div>
+                  <div className="space-y-3 mb-8">
+                    {plan.features.map(f => <div key={f} className="flex items-center gap-2 text-xs text-zinc-400"><CheckCircle2 size={14} className="text-blue-500" /> {f}</div>)}
                   </div>
-                  <button onClick={() => setStep(6)} className="mt-12 w-full bg-white text-black py-6 rounded-2xl font-black uppercase tracking-widest text-xs">Verify Access</button>
-               </div>
+                  <div className="h-1 bg-white/10 rounded-full overflow-hidden"><div className="h-full bg-blue-600 w-1/4 group-hover:w-full transition-all duration-700" /></div>
+                </div>
+              ))}
             </motion.div>
           )}
 
+          {/* STEP 3: Email / Auth */}
+          {step === 3 && (
+            <motion.div key="s3" variants={fader} initial="initial" animate="animate" exit="exit" className="max-w-md mx-auto w-full bg-zinc-950/80 p-12 rounded-[3.5rem] border border-white/5 text-center">
+               <h2 className="text-xl font-black italic uppercase mb-8">{isLoginMode ? "Secure Login" : "Initialize Protocol"}</h2>
+               <div className="flex justify-center mb-8">
+                 <GoogleLogin onSuccess={() => handleAuthSubmit("google_user@gmail.com")} onError={() => setError("Google Fail")} />
+               </div>
+               <form onSubmit={(e) => { e.preventDefault(); handleAuthSubmit(formData.email); }}>
+                 <input type="email" required placeholder="EMAIL" className="w-full bg-black border border-white/10 p-5 rounded-2xl mb-4 font-mono text-xs outline-none focus:border-blue-500" onChange={e => setFormData({email: e.target.value})} />
+                 <button className="w-full bg-blue-600 py-5 rounded-2xl font-black uppercase italic text-sm tracking-widest hover:bg-blue-500">
+                    {loading ? <Loader2 className="animate-spin mx-auto" /> : "CONTINUE"}
+                 </button>
+               </form>
+               <button onClick={() => setIsLoginMode(!isLoginMode)} className="mt-6 text-[10px] uppercase font-bold text-zinc-500 hover:text-white transition-colors">
+                  {isLoginMode ? "Need an Account?" : "Already Registered?"}
+               </button>
+               {error && <p className="mt-4 text-red-500 text-[9px] font-bold uppercase tracking-widest">{error}</p>}
+            </motion.div>
+          )}
+
+          {/* STEP 4: Stripe */}
+          {step === 4 && clientSecret && (
+            <motion.div key="s4" variants={fader} initial="initial" animate="animate" exit="exit" className="max-w-md mx-auto w-full bg-zinc-950 p-10 rounded-[3.5rem] border border-blue-500/20">
+              <Elements stripe={stripePromise} options={{ clientSecret, appearance: { theme: 'night' } }}>
+                <CheckoutForm onSuccess={startVerification} />
+              </Elements>
+            </motion.div>
+          )}
+
+          {/* STEP 5: Code Issued */}
+          {step === 5 && (
+            <motion.div key="s5" variants={fader} initial="initial" animate="animate" exit="exit" className="max-w-md mx-auto text-center bg-zinc-950 p-14 rounded-[4rem] border border-white/5">
+                <Cpu size={50} className="mx-auto mb-8 text-blue-500 animate-pulse" />
+                <h2 className="text-2xl font-black uppercase italic mb-8">Encryption Key</h2>
+                <div className="bg-black py-10 rounded-3xl border border-white/5">
+                  <span className="text-5xl font-mono text-blue-400 tracking-[0.3em] font-black">{generatedCode}</span>
+                </div>
+                <button onClick={() => setStep(6)} className="mt-10 w-full bg-white text-black py-5 rounded-2xl font-black uppercase text-xs">Verify Identity</button>
+            </motion.div>
+          )}
+
+          {/* STEP 6: K9 Verification */}
           {step === 6 && (
-            <motion.div key="s6" variants={fader} initial="initial" animate="animate" exit="exit" className="max-w-md mx-auto text-center">
-               <div className="bg-zinc-950/90 backdrop-blur-3xl p-14 rounded-[4rem] border border-white/5 shadow-3xl relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-full h-1 bg-blue-500/30 animate-scan" />
-                  <Image src={dogImage} width={220} height={220} alt="K9" className="mx-auto mb-10 grayscale opacity-80" unoptimized />
-                  <input autoFocus maxLength={6} placeholder="000000" className="w-full bg-black/80 text-center text-6xl p-8 rounded-[2rem] border border-white/10 text-blue-500 font-mono outline-none mb-8" onChange={e => setDogCode(e.target.value)} />
-                  <button onClick={handleFinalRedirect} className="w-full bg-blue-600 py-6 rounded-2xl font-black uppercase italic tracking-widest transition-all">
-                    {loading ? <Loader2 className="animate-spin mx-auto" /> : "Grant Access"}
-                  </button>
-                  {error && <p className="mt-6 text-red-500 font-bold text-[9px] uppercase tracking-[0.3em]">{error}</p>}
-               </div>
+            <motion.div key="s6" variants={fader} initial="initial" animate="animate" exit="exit" className="max-w-md mx-auto text-center bg-zinc-950 p-12 rounded-[4rem] border border-white/5 relative overflow-hidden">
+                <Image src={dogImage} width={200} height={200} alt="K9" className="mx-auto mb-8 grayscale" />
+                <input autoFocus maxLength={6} placeholder="000000" className="w-full bg-black text-center text-6xl p-6 rounded-3xl border border-white/10 text-blue-500 font-mono outline-none mb-6" onChange={e => setDogCode(e.target.value)} />
+                <button onClick={handleFinalVerify} className="w-full bg-blue-600 py-5 rounded-2xl font-black uppercase italic tracking-widest">
+                  {loading ? <Loader2 className="animate-spin mx-auto" /> : "Authorize"}
+                </button>
+                {error && <p className="mt-4 text-red-500 font-bold text-[10px] uppercase">{error}</p>}
             </motion.div>
           )}
 
+          {/* STEP 7: Success */}
           {step === 7 && (
-            <motion.div key="s7" variants={fader} initial="initial" animate="animate" className="max-w-md mx-auto text-center">
-               <div className="bg-zinc-950/90 backdrop-blur-3xl p-14 rounded-[4rem] border border-blue-500/30 shadow-2xl">
-                  <CheckCircle2 size={64} className="mx-auto mb-6 text-blue-500" />
-                  <h2 className="text-3xl font-black uppercase italic mb-4 tracking-tighter text-white">Access Granted</h2>
-                  <p className="text-zinc-500 font-mono text-[10px] uppercase tracking-[0.5em] animate-pulse">Synchronizing Dashboard...</p>
-               </div>
+            <motion.div key="s7" variants={fader} initial="initial" animate="animate" className="max-w-md mx-auto text-center bg-zinc-950 p-14 rounded-[4rem] border border-blue-500/30">
+               <CheckCircle2 size={64} className="mx-auto mb-6 text-blue-500" />
+               <h2 className="text-3xl font-black uppercase italic text-white">Access Granted</h2>
+               <p className="text-zinc-500 font-mono text-[10px] uppercase mt-4 animate-pulse">Routing to Dashboard...</p>
             </motion.div>
           )}
 
         </AnimatePresence>
       </div>
-
-      <style jsx global>{`
-        @keyframes scan { 0% { top: 0%; opacity: 0; } 50% { opacity: 1; } 100% { top: 100%; opacity: 0; } }
-        .animate-scan { animation: scan 4s linear infinite; }
-      `}</style>
     </div>
   );
 }
@@ -266,8 +237,8 @@ function SignupFlow() {
 function LoadingScreen() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-[#020202]">
-      <Loader2 className="text-blue-500 animate-spin" size={60} />
-      <div className="text-zinc-700 font-mono text-[9px] uppercase tracking-[0.6em] mt-4">Establishing Secure Neural Link</div>
+      <Loader2 className="text-blue-500 animate-spin" size={50} />
+      <div className="text-zinc-700 font-mono text-[10px] uppercase tracking-[0.5em] mt-4">Syncing Neural Link...</div>
     </div>
   );
 }
