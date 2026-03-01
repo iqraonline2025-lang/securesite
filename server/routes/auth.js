@@ -13,11 +13,11 @@ const getPriceInCents = (tier) => {
   return prices[tier] || null;
 };
 
-// STRIPE INTENT
+// STRIPE: Create Intent
 router.post("/create-payment-intent", async (req, res) => {
   const { planTier, email } = req.body;
   const amount = getPriceInCents(planTier);
-  if (!amount) return res.status(400).json({ message: "Invalid plan" });
+  if (!amount) return res.status(400).json({ message: "Invalid Plan" });
 
   try {
     const intent = await stripe.paymentIntents.create({
@@ -33,7 +33,7 @@ router.post("/create-payment-intent", async (req, res) => {
 
 // GOOGLE AUTH
 router.post("/google-auth", async (req, res) => {
-  const { token } = req.body;
+  const { token, planTier } = req.body;
   try {
     const ticket = await googleClient.verifyIdToken({
       idToken: token,
@@ -41,44 +41,37 @@ router.post("/google-auth", async (req, res) => {
     });
     const { email, name, picture } = ticket.getPayload();
     let user = await User.findOne({ email });
-    
     if (!user) {
-      user = await User.create({ email, full_name: name, avatar: picture, verified: true });
+      user = new User({ email, full_name: name, avatar: picture, plan_tier: planTier || "Free", verified: true });
+      await user.save();
     }
     res.json({ success: true, user });
   } catch (err) {
-    res.status(401).json({ message: "Google auth failed" });
+    res.status(401).json({ message: "Google Auth Failed" });
   }
 });
 
-// FINALIZE SIGNUP / LOGIN
+// FINAL AUTH SYNC (Signup/Login)
 router.post("/finalize-auth", async (req, res) => {
   const { email, password, planTier, isLogin } = req.body;
-
   try {
     let user = await User.findOne({ email });
 
     if (isLogin) {
       if (!user) return res.status(404).json({ message: "User not found" });
       const isMatch = await bcrypt.compare(password, user.password_hash);
-      if (!isMatch) return res.status(401).json({ message: "Invalid password" });
+      if (!isMatch) return res.status(401).json({ message: "Invalid credentials" });
       return res.json({ success: true, user });
     }
 
     if (user) return res.status(400).json({ message: "User already exists" });
 
     const hash = await bcrypt.hash(password, 10);
-    user = new User({
-      email,
-      password_hash: hash,
-      plan_tier: planTier || "Free",
-      verified: true
-    });
-
+    user = new User({ email, password_hash: hash, plan_tier: planTier || "Free", verified: true });
     await user.save();
     res.status(201).json({ success: true, user });
   } catch (err) {
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Server Error" });
   }
 });
 
