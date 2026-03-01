@@ -1,61 +1,71 @@
 import express from "express";
+import bcrypt from "bcrypt";
 import Stripe from "stripe";
-import { OAuth2Client } from "google-auth-library";
 import User from "../models/User.js";
 
 const router = express.Router();
 
 /* ================= SERVICES ================= */
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+if (!process.env.STRIPE_SECRET_KEY) throw new Error("STRIPE_SECRET_KEY missing");
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2024-06-20" });
 
 /* ================= HELPERS ================= */
 const getPriceInCents = (tier) => {
-  const prices = {
-    "Basic": 0,
-    "Pro": 500,          // £5
-    "Ultra": 1000,       // £10
-    "Enterprise": 300000, // £3000
-    "Universal": 50000,   // £500
-  };
-  return prices[tier] || 0;
+  const prices = { "Pro": 500, "Ultra": 1000, "Enterprise": 300000, "Universal": 50000 };
+  return prices[tier] || null;
 };
 
 /* ================= ROUTES ================= */
 
-// 1. Create Payment Intent
+// 1. STRIPE PAYMENT INTENT
 router.post("/create-payment-intent", async (req, res) => {
+  const { planTier, email } = req.body;
+  const amount = getPriceInCents(planTier);
+  
+  if (!amount) return res.status(400).json({ message: "Invalid plan tier" });
+
   try {
-    const { planTier, email } = req.body;
-    const amount = getPriceInCents(planTier);
-
-    if (amount === 0) {
-      return res.status(400).json({ message: "Free plan does not require payment" });
-    }
-
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: amount,
+    const intent = await stripe.paymentIntents.create({
+      amount,
       currency: "gbp",
-      metadata: { email, planTier },
+      metadata: { user_email: email, planTier },
       automatic_payment_methods: { enabled: true },
     });
-
-    res.json({ clientSecret: paymentIntent.client_secret });
-  } catch (error) {
-    console.error("Stripe Error:", error);
-    res.status(500).json({ message: "Internal Server Error" });
+    res.json({ clientSecret: intent.client_secret });
+  } catch (err) {
+    console.error("STRIPE ERROR:", err.message);
+    res.status(500).json({ message: "Payment initialization failed" });
   }
 });
 
-// 2. Verify Code (Optional if you want to save to DB)
-router.post("/verify-code", async (req, res) => {
-  const { email, code } = req.body;
+// 2. FINALIZE DB RECORD
+// This is called after the user passes the local "Dog" verification
+router.post("/finalize-auth", async (req, res) => {
+  const { email, planTier, isLogin } = req.body;
+
   try {
-    // In a real app, you'd check this code against a value stored in Redis/DB
-    // For now, the frontend handles the immediate match logic.
-    res.json({ success: true });
+    let user = await User.findOne({ email });
+
+    if (isLogin) {
+      if (!user) return res.status(404).json({ message: "Account not found" });
+      return res.json({ success: true, user });
+    }
+
+    if (user) return res.status(400).json({ message: "Account already exists" });
+
+    // Create new user
+    user = new User({
+      email,
+      plan_tier: planTier || "Free",
+      verified: true,
+      full_name: email.split('@')[0], // Default name from email
+    });
+
+    await user.save();
+    res.status(201).json({ success: true, user });
   } catch (err) {
-    res.status(500).json({ message: "Verification failed" });
+    console.error("DB ERROR:", err.message);
+    res.status(500).json({ message: "Database synchronization failed" });
   }
 });
 
