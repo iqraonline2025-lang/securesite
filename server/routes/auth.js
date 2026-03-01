@@ -1,23 +1,22 @@
 import express from "express";
 import bcrypt from "bcrypt";
 import Stripe from "stripe";
-import { OAuth2Client } from "google-auth-library";
 import User from "../models/User.js";
 
 const router = express.Router();
-const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2024-06-20" });
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 const getPriceInCents = (tier) => {
   const prices = { "Pro": 500, "Ultra": 1000, "Enterprise": 300000, "Universal": 50000 };
   return prices[tier] || null;
 };
 
-// STRIPE: Create Intent
+// CREATE PAYMENT
 router.post("/create-payment-intent", async (req, res) => {
   const { planTier, email } = req.body;
   const amount = getPriceInCents(planTier);
-  if (!amount) return res.status(400).json({ message: "Invalid Plan" });
+  
+  if (!amount) return res.status(400).json({ message: "Invalid plan" });
 
   try {
     const intent = await stripe.paymentIntents.create({
@@ -31,27 +30,7 @@ router.post("/create-payment-intent", async (req, res) => {
   }
 });
 
-// GOOGLE AUTH
-router.post("/google-auth", async (req, res) => {
-  const { token, planTier } = req.body;
-  try {
-    const ticket = await googleClient.verifyIdToken({
-      idToken: token,
-      audience: process.env.GOOGLE_CLIENT_ID,
-    });
-    const { email, name, picture } = ticket.getPayload();
-    let user = await User.findOne({ email });
-    if (!user) {
-      user = new User({ email, full_name: name, avatar: picture, plan_tier: planTier || "Free", verified: true });
-      await user.save();
-    }
-    res.json({ success: true, user });
-  } catch (err) {
-    res.status(401).json({ message: "Google Auth Failed" });
-  }
-});
-
-// FINAL AUTH SYNC (Signup/Login)
+// FINAL SYNC
 router.post("/finalize-auth", async (req, res) => {
   const { email, password, planTier, isLogin } = req.body;
   try {
@@ -59,19 +38,19 @@ router.post("/finalize-auth", async (req, res) => {
 
     if (isLogin) {
       if (!user) return res.status(404).json({ message: "User not found" });
-      const isMatch = await bcrypt.compare(password, user.password_hash);
-      if (!isMatch) return res.status(401).json({ message: "Invalid credentials" });
+      const valid = await bcrypt.compare(password, user.password_hash);
+      if (!valid) return res.status(401).json({ message: "Invalid credentials" });
       return res.json({ success: true, user });
     }
 
-    if (user) return res.status(400).json({ message: "User already exists" });
+    if (user) return res.status(400).json({ message: "User exists" });
 
     const hash = await bcrypt.hash(password, 10);
-    user = new User({ email, password_hash: hash, plan_tier: planTier || "Free", verified: true });
+    user = new User({ email, password_hash: hash, plan_tier: planTier, verified: true });
     await user.save();
     res.status(201).json({ success: true, user });
   } catch (err) {
-    res.status(500).json({ message: "Server Error" });
+    res.status(500).json({ message: "DB Error" });
   }
 });
 
