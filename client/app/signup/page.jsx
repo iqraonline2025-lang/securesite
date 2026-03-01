@@ -45,7 +45,6 @@ export default function SignupPage() {
 
   useEffect(() => {
     setIsMounted(true);
-    // CHECK FOR ACTIVE SESSION
     const session = localStorage.getItem("vault_session_active");
     if (session === "true") {
       router.replace("/dashboard");
@@ -79,66 +78,77 @@ function SignupFlow() {
   const [error, setError] = useState("");
   const [formData, setFormData] = useState({ email: "", password: "" });
 
+  const generateCode = () => {
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    setGeneratedCode(code);
+    setStep(5); // Show code to user
+    setLoading(false);
+  };
+
   const handleAuthSuccess = async (email) => {
     setLoading(true);
     setError("");
 
+    // 1. If user is logging in, skip plans/payment and go to verification
     if (isLoginMode) {
       generateCode();
       return;
     }
 
-    // CHECKOUT BEFORE CODE
-    if (selectedPlan?.price > 0) {
+    // 2. If Signup and Paid Plan, initialize Stripe
+    if (selectedPlan && selectedPlan.price > 0) {
       try {
         const res = await fetch(`${API_BASE}/api/create-payment-intent`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ planTier: selectedPlan.tier, email: email }),
+          body: JSON.stringify({ 
+            amount: selectedPlan.price * 100, // Stripe expects cents
+            email: email,
+            tier: selectedPlan.tier 
+          }),
         });
+
+        if (!res.ok) {
+           const errData = await res.json();
+           throw new Error(errData.message || "Backend rejected payment request");
+        }
+
         const data = await res.json();
         if (data.clientSecret) {
           setClientSecret(data.clientSecret);
-          setStep(4); 
+          setStep(4); // Move to Stripe Checkout
         } else {
-          throw new Error("Payment initialization failed");
+          throw new Error("No client secret received");
         }
       } catch (err) {
         setError(err.message);
       } finally {
         setLoading(false);
       }
-    } else {
+    } 
+    // 3. If Signup and Free Plan
+    else {
       generateCode();
     }
-  };
-
-  const generateCode = () => {
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    setGeneratedCode(code);
-    setStep(5); 
-    setLoading(false);
   };
 
   const handleFinalRedirect = () => {
     if (dogCode === generatedCode) {
       setLoading(true);
-      // PERMANENT SESSION LOCK
       localStorage.setItem("vault_session_active", "true");
       setIsAuthenticated(true);
       setStep(7);
       setTimeout(() => {
         router.push("/dashboard");
-      }, 1200);
+      }, 1500);
     } else {
       setError("CRITICAL_ERR: AUTH_KEY_MISMATCH");
     }
   };
 
-  if (isAuthenticated && step !== 7) return <LoadingScreen />;
-
   return (
     <div className="relative flex items-center justify-center min-h-screen p-6">
+      {/* Background Glows */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-blue-600/10 blur-[150px] rounded-full opacity-50 translate-x-1/2 -translate-y-1/2" />
         <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-purple-600/10 blur-[150px] rounded-full opacity-30 -translate-x-1/2 translate-y-1/2" />
@@ -147,6 +157,7 @@ function SignupFlow() {
       <div className="w-full max-w-6xl relative z-10">
         <AnimatePresence mode="wait">
           
+          {/* STEP 1: USER TYPE */}
           {step === 1 && (
             <motion.div key="s1" variants={fader} initial="initial" animate="animate" exit="exit" className="grid md:grid-cols-3 gap-6">
               {USER_TYPES.map((type) => (
@@ -164,6 +175,7 @@ function SignupFlow() {
             </motion.div>
           )}
 
+          {/* STEP 2: PLAN SELECTION */}
           {step === 2 && (
             <motion.div key="s2" variants={fader} initial="initial" animate="animate" exit="exit" className="flex flex-wrap justify-center gap-6">
               {PLANS.filter(p => p.category === userType).map((plan) => (
@@ -187,6 +199,7 @@ function SignupFlow() {
             </motion.div>
           )}
 
+          {/* STEP 3: AUTHENTICATION */}
           {step === 3 && (
             <motion.div key="s3" variants={fader} initial="initial" animate="animate" exit="exit" className="max-w-md mx-auto w-full bg-zinc-950/80 backdrop-blur-3xl p-12 rounded-[4rem] border border-white/5 shadow-2xl text-center">
                <h2 className="text-xl font-black italic uppercase mb-8 tracking-tighter">
@@ -195,6 +208,7 @@ function SignupFlow() {
                <div className="flex justify-center mb-10">
                   <GoogleLogin 
                     onSuccess={() => handleAuthSuccess("google_user")} 
+                    onError={() => setError("Google Auth Failed")}
                     theme="filled_black" 
                     shape="pill"
                   />
@@ -202,7 +216,7 @@ function SignupFlow() {
                <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); handleAuthSuccess(formData.email); }}>
                   <input type="email" required placeholder="SECURE_EMAIL" className="w-full bg-black/60 border border-white/5 p-5 rounded-2xl outline-none focus:border-blue-500/50 transition-all font-mono text-xs" onChange={e => setFormData({...formData, email: e.target.value})} />
                   <input type="password" required placeholder="ACCESS_KEY" className="w-full bg-black/60 border border-white/5 p-5 rounded-2xl outline-none focus:border-blue-500/50 transition-all font-mono text-xs" onChange={e => setFormData({...formData, password: e.target.value})} />
-                  <button className="w-full bg-blue-600 hover:bg-blue-500 py-6 rounded-2xl font-black uppercase italic tracking-[0.3em] transition-all text-sm mt-4">
+                  <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-500 py-6 rounded-2xl font-black uppercase italic tracking-[0.3em] transition-all text-sm mt-4">
                     {loading ? <Loader2 className="animate-spin mx-auto" /> : (isLoginMode ? "Access Vault" : "Initiate Protocol")}
                   </button>
                   {error && <p className="text-red-500 text-center text-[10px] mt-4 uppercase font-bold">{error}</p>}
@@ -215,6 +229,7 @@ function SignupFlow() {
             </motion.div>
           )}
 
+          {/* STEP 4: STRIPE CHECKOUT */}
           {step === 4 && (
             <motion.div key="s4" variants={fader} initial="initial" animate="animate" exit="exit" className="max-w-md mx-auto w-full">
               <div className="bg-[#080808] border border-blue-500/20 p-12 rounded-[4rem] shadow-2xl">
@@ -225,6 +240,7 @@ function SignupFlow() {
             </motion.div>
           )}
 
+          {/* STEP 5: SHOW GENERATED CODE */}
           {step === 5 && (
             <motion.div key="s5" variants={fader} initial="initial" animate="animate" exit="exit" className="max-w-md mx-auto text-center">
                <div className="bg-zinc-950/90 backdrop-blur-3xl p-14 rounded-[4rem] border border-white/5 shadow-3xl">
@@ -238,12 +254,21 @@ function SignupFlow() {
             </motion.div>
           )}
 
+          {/* STEP 6: CODE VERIFICATION */}
           {step === 6 && (
             <motion.div key="s6" variants={fader} initial="initial" animate="animate" exit="exit" className="max-w-md mx-auto text-center">
                <div className="bg-zinc-950/90 backdrop-blur-3xl p-14 rounded-[4rem] border border-white/5 shadow-3xl relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-full h-1 bg-blue-500/30 animate-scan" />
-                  <Image src={dogImage} width={220} height={220} alt="K9" className="mx-auto mb-10 grayscale" unoptimized />
-                  <input autoFocus maxLength={6} placeholder="000000" className="w-full bg-black/80 text-center text-6xl p-8 rounded-[2rem] border border-white/10 text-blue-500 font-mono outline-none mb-8" onChange={e => setDogCode(e.target.value)} />
+                  <div className="mb-10 flex justify-center">
+                    <Image src={dogImage} width={220} height={220} alt="K9" className="grayscale opacity-80" unoptimized />
+                  </div>
+                  <input 
+                    autoFocus 
+                    maxLength={6} 
+                    placeholder="000000" 
+                    className="w-full bg-black/80 text-center text-6xl p-8 rounded-[2rem] border border-white/10 text-blue-500 font-mono outline-none mb-8" 
+                    onChange={e => setDogCode(e.target.value)} 
+                  />
                   <button onClick={handleFinalRedirect} className="w-full bg-blue-600 py-6 rounded-2xl font-black uppercase italic tracking-widest">
                     {loading ? <Loader2 className="animate-spin mx-auto" /> : "Grant Access"}
                   </button>
@@ -252,6 +277,7 @@ function SignupFlow() {
             </motion.div>
           )}
 
+          {/* STEP 7: SUCCESS */}
           {step === 7 && (
             <motion.div key="s7" variants={fader} initial="initial" animate="animate" className="max-w-md mx-auto text-center">
                <div className="bg-zinc-950/90 backdrop-blur-3xl p-14 rounded-[4rem] border border-blue-500/30 shadow-2xl">
