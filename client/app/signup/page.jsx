@@ -12,11 +12,10 @@ import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements } from "@stripe/react-stripe-js";
 
-// --- EXTERNAL COMPONENTS ---
+// --- EXTERNAL ---
 import CheckoutForm from "../components/CheckoutForm"; 
 import dogImage from "../public/dog-4.png";
 
-// Updated Backend URL
 const API_BASE = "https://securesite-10.onrender.com";
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "");
 
@@ -30,8 +29,8 @@ const PLANS = [
   { id: "ind-1", tier: "Basic", price: 0, display: "Free", category: "individual", features: ["1 Device", "Standard Encryption", "Community Support"] },
   { id: "ind-2", tier: "Pro", price: 5, display: "£5", category: "individual", features: ["5 Devices", "Advanced VPN", "24/7 Support", "Ad-Blocker"] },
   { id: "ind-3", tier: "Ultra", price: 10, display: "£10", category: "individual", features: ["Unlimited Devices", "Quantum Guard", "Priority Node", "Dedicated IP"] },
-  { id: "biz-1", tier: "Enterprise", price: 49, display: "£49", category: "business", features: ["Admin Console", "SSO Integration", "SLA Guarantee", "Audit Logs"] },
-  { id: "acc-1", tier: "Universal", price: 2, display: "£2", category: "accessibility", features: ["Voice Command", "Screen Reader Opt", "Simplified UI", "Haptic Alerts"] },
+  { id: "biz-1", tier: "Enterprise", price: 3000, display: "£3000", category: "business", features: ["Admin Console", "SSO Integration", "SLA Guarantee", "Audit Logs"] },
+  { id: "acc-1", tier: "Universal", price: 5000, display: "£5000", category: "accessibility", features: ["Voice Command", "Screen Reader Opt", "Simplified UI", "Haptic Alerts"] },
 ];
 
 const fader = {
@@ -67,23 +66,14 @@ function SignupFlow() {
   const handleAuthSuccess = async (email) => {
     setLoading(true);
     setError("");
-    
     if (selectedPlan?.price > 0 && userType === "individual") {
       try {
         const res = await fetch(`${API_BASE}/api/create-payment-intent`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            planTier: selectedPlan.tier, 
-            email: email 
-          }),
+          body: JSON.stringify({ planTier: selectedPlan.tier, email: email }),
         });
-
-        if (!res.ok) {
-          const errorData = await res.json();
-          throw new Error(errorData.message || "Backend Protocol Error (400)");
-        }
-
+        if (!res.ok) throw new Error("Backend Protocol Error");
         const data = await res.json();
         if (data.clientSecret) {
           setClientSecret(data.clientSecret);
@@ -110,6 +100,8 @@ function SignupFlow() {
     if (dogCode === generatedCode) {
       setLoading(true);
       setError("");
+      // Transition to Step 7 to clear all previous UI components
+      setStep(7);
       setTimeout(() => {
         router.push("/dashboard");
       }, 1500);
@@ -249,6 +241,25 @@ function SignupFlow() {
                     </button>
                     {error && <p className="mt-6 text-red-500 font-bold text-[9px] uppercase tracking-[0.3em]">{error}</p>}
                   </form>
+               </div>
+            </motion.div>
+          )}
+
+          {/* STEP 7: FINAL SUCCESS STATE - PREVENTS FORM RE-RENDER */}
+          {step === 7 && (
+            <motion.div key="s7" variants={fader} initial="initial" animate="animate" className="max-w-md mx-auto text-center">
+               <div className="bg-zinc-950/90 backdrop-blur-3xl p-14 rounded-[4rem] border border-blue-500/30 shadow-[0_0_40px_rgba(59,130,246,0.2)]">
+                  <CheckCircle2 size={64} className="mx-auto mb-6 text-blue-500" />
+                  <h2 className="text-3xl font-black uppercase italic mb-4 tracking-tighter text-white">Access Granted</h2>
+                  <div className="w-full bg-white/5 h-1 rounded-full overflow-hidden mb-4">
+                     <motion.div 
+                        initial={{ width: "0%" }} 
+                        animate={{ width: "100%" }} 
+                        transition={{ duration: 1.2 }} 
+                        className="h-full bg-blue-500" 
+                     />
+                  </div>
+                  <p className="text-zinc-500 font-mono text-[10px] uppercase tracking-[0.5em] animate-pulse">Synchronizing Dashboard...</p>
                </div>
             </motion.div>
           )}
