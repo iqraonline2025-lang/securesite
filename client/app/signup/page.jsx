@@ -30,7 +30,7 @@ const PLANS = [
   { id: "ind-2", tier: "Pro", price: 5, display: "£5", category: "individual", features: ["5 Devices", "Advanced VPN", "24/7 Support", "Ad-Blocker"] },
   { id: "ind-3", tier: "Ultra", price: 10, display: "£10", category: "individual", features: ["Unlimited Devices", "Quantum Guard", "Priority Node", "Dedicated IP"] },
   { id: "biz-1", tier: "Enterprise", price: 3000, display: "£3000", category: "business", features: ["Admin Console", "SSO Integration", "SLA Guarantee", "Audit Logs"] },
-  { id: "acc-1", tier: "Universal", price: 5000, display: "£5000", category: "accessibility", features: ["Voice Command", "Screen Reader Opt", "Simplified UI", "Haptic Alerts"] },
+  { id: "acc-1", tier: "Universal", price: 500, display: "£500", category: "accessibility", features: ["Voice Command", "Screen Reader Opt", "Simplified UI", "Haptic Alerts"] },
 ];
 
 const fader = {
