@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  User, Building2, Accessibility, Loader2, Zap, 
-  Cpu, Fingerprint, CheckCircle2, Lock 
+  User, Building2, Accessibility, Loader2, 
+  Cpu, CheckCircle2 
 } from "lucide-react";
 import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
 import { loadStripe } from "@stripe/stripe-js";
@@ -68,7 +68,6 @@ function SignupFlow() {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [isLoginMode, setIsLoginMode] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userType, setUserType] = useState(null);
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [clientSecret, setClientSecret] = useState("");
@@ -81,7 +80,7 @@ function SignupFlow() {
   const generateCode = () => {
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     setGeneratedCode(code);
-    setStep(5); // Show code to user
+    setStep(5);
     setLoading(false);
   };
 
@@ -89,46 +88,34 @@ function SignupFlow() {
     setLoading(true);
     setError("");
 
-    // 1. If user is logging in, skip plans/payment and go to verification
-    if (isLoginMode) {
+    // 1. Logic for Login or Free Plans
+    if (isLoginMode || (selectedPlan && selectedPlan.price === 0)) {
       generateCode();
       return;
     }
 
-    // 2. If Signup and Paid Plan, initialize Stripe
-    if (selectedPlan && selectedPlan.price > 0) {
-      try {
-        const res = await fetch(`${API_BASE}/api/create-payment-intent`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            amount: selectedPlan.price * 100, // Stripe expects cents
-            email: email,
-            tier: selectedPlan.tier 
-          }),
-        });
+    // 2. Logic for Paid Signup
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/create-payment-intent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          planTier: selectedPlan.tier, 
+          email: email 
+        }),
+      });
 
-        if (!res.ok) {
-           const errData = await res.json();
-           throw new Error(errData.message || "Backend rejected payment request");
-        }
-
-        const data = await res.json();
-        if (data.clientSecret) {
-          setClientSecret(data.clientSecret);
-          setStep(4); // Move to Stripe Checkout
-        } else {
-          throw new Error("No client secret received");
-        }
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
+      const data = await res.json();
+      if (res.ok && data.clientSecret) {
+        setClientSecret(data.clientSecret);
+        setStep(4);
+      } else {
+        throw new Error(data.message || "Initialization failed");
       }
-    } 
-    // 3. If Signup and Free Plan
-    else {
-      generateCode();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -136,11 +123,8 @@ function SignupFlow() {
     if (dogCode === generatedCode) {
       setLoading(true);
       localStorage.setItem("vault_session_active", "true");
-      setIsAuthenticated(true);
       setStep(7);
-      setTimeout(() => {
-        router.push("/dashboard");
-      }, 1500);
+      setTimeout(() => router.push("/dashboard"), 1500);
     } else {
       setError("CRITICAL_ERR: AUTH_KEY_MISMATCH");
     }
@@ -148,7 +132,7 @@ function SignupFlow() {
 
   return (
     <div className="relative flex items-center justify-center min-h-screen p-6">
-      {/* Background Glows */}
+      {/* Background UI elements */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-blue-600/10 blur-[150px] rounded-full opacity-50 translate-x-1/2 -translate-y-1/2" />
         <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-purple-600/10 blur-[150px] rounded-full opacity-30 -translate-x-1/2 translate-y-1/2" />
@@ -157,7 +141,6 @@ function SignupFlow() {
       <div className="w-full max-w-6xl relative z-10">
         <AnimatePresence mode="wait">
           
-          {/* STEP 1: USER TYPE */}
           {step === 1 && (
             <motion.div key="s1" variants={fader} initial="initial" animate="animate" exit="exit" className="grid md:grid-cols-3 gap-6">
               {USER_TYPES.map((type) => (
@@ -175,7 +158,6 @@ function SignupFlow() {
             </motion.div>
           )}
 
-          {/* STEP 2: PLAN SELECTION */}
           {step === 2 && (
             <motion.div key="s2" variants={fader} initial="initial" animate="animate" exit="exit" className="flex flex-wrap justify-center gap-6">
               {PLANS.filter(p => p.category === userType).map((plan) => (
@@ -199,7 +181,6 @@ function SignupFlow() {
             </motion.div>
           )}
 
-          {/* STEP 3: AUTHENTICATION */}
           {step === 3 && (
             <motion.div key="s3" variants={fader} initial="initial" animate="animate" exit="exit" className="max-w-md mx-auto w-full bg-zinc-950/80 backdrop-blur-3xl p-12 rounded-[4rem] border border-white/5 shadow-2xl text-center">
                <h2 className="text-xl font-black italic uppercase mb-8 tracking-tighter">
@@ -209,28 +190,22 @@ function SignupFlow() {
                   <GoogleLogin 
                     onSuccess={() => handleAuthSuccess("google_user")} 
                     onError={() => setError("Google Auth Failed")}
-                    theme="filled_black" 
-                    shape="pill"
                   />
                </div>
                <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); handleAuthSuccess(formData.email); }}>
-                  <input type="email" required placeholder="SECURE_EMAIL" className="w-full bg-black/60 border border-white/5 p-5 rounded-2xl outline-none focus:border-blue-500/50 transition-all font-mono text-xs" onChange={e => setFormData({...formData, email: e.target.value})} />
-                  <input type="password" required placeholder="ACCESS_KEY" className="w-full bg-black/60 border border-white/5 p-5 rounded-2xl outline-none focus:border-blue-500/50 transition-all font-mono text-xs" onChange={e => setFormData({...formData, password: e.target.value})} />
+                  <input type="email" required placeholder="EMAIL" className="w-full bg-black/60 border border-white/5 p-5 rounded-2xl outline-none focus:border-blue-500/50 transition-all font-mono text-xs" onChange={e => setFormData({...formData, email: e.target.value})} />
                   <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-500 py-6 rounded-2xl font-black uppercase italic tracking-[0.3em] transition-all text-sm mt-4">
-                    {loading ? <Loader2 className="animate-spin mx-auto" /> : (isLoginMode ? "Access Vault" : "Initiate Protocol")}
+                    {loading ? <Loader2 className="animate-spin mx-auto" /> : "CONTINUE"}
                   </button>
                   {error && <p className="text-red-500 text-center text-[10px] mt-4 uppercase font-bold">{error}</p>}
                </form>
-               <div className="mt-8 pt-6 border-t border-white/5">
-                  <button onClick={() => setIsLoginMode(!isLoginMode)} className="text-[10px] uppercase font-bold tracking-widest text-zinc-500 hover:text-blue-400">
-                    {isLoginMode ? "New User? Create Account" : "Existing Member? Secure Login"}
-                  </button>
-               </div>
+               <button onClick={() => setIsLoginMode(!isLoginMode)} className="mt-8 text-[10px] uppercase font-bold tracking-widest text-zinc-500 hover:text-blue-400">
+                  {isLoginMode ? "Create Account" : "Secure Login"}
+               </button>
             </motion.div>
           )}
 
-          {/* STEP 4: STRIPE CHECKOUT */}
-          {step === 4 && (
+          {step === 4 && clientSecret && (
             <motion.div key="s4" variants={fader} initial="initial" animate="animate" exit="exit" className="max-w-md mx-auto w-full">
               <div className="bg-[#080808] border border-blue-500/20 p-12 rounded-[4rem] shadow-2xl">
                 <Elements stripe={stripePromise} options={{ clientSecret, appearance: { theme: 'night' } }}>
@@ -240,7 +215,6 @@ function SignupFlow() {
             </motion.div>
           )}
 
-          {/* STEP 5: SHOW GENERATED CODE */}
           {step === 5 && (
             <motion.div key="s5" variants={fader} initial="initial" animate="animate" exit="exit" className="max-w-md mx-auto text-center">
                <div className="bg-zinc-950/90 backdrop-blur-3xl p-14 rounded-[4rem] border border-white/5 shadow-3xl">
@@ -249,27 +223,18 @@ function SignupFlow() {
                   <div className="bg-black/80 py-12 rounded-[2rem] border border-white/5 shadow-inner">
                     <span className="text-5xl font-mono text-blue-400 tracking-[0.4em] font-black">{generatedCode}</span>
                   </div>
-                  <button onClick={() => setStep(6)} className="mt-12 w-full bg-white text-black py-6 rounded-2xl font-black uppercase tracking-widest text-xs">Verify Biometrics</button>
+                  <button onClick={() => setStep(6)} className="mt-12 w-full bg-white text-black py-6 rounded-2xl font-black uppercase tracking-widest text-xs">Verify Access</button>
                </div>
             </motion.div>
           )}
 
-          {/* STEP 6: CODE VERIFICATION */}
           {step === 6 && (
             <motion.div key="s6" variants={fader} initial="initial" animate="animate" exit="exit" className="max-w-md mx-auto text-center">
                <div className="bg-zinc-950/90 backdrop-blur-3xl p-14 rounded-[4rem] border border-white/5 shadow-3xl relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-full h-1 bg-blue-500/30 animate-scan" />
-                  <div className="mb-10 flex justify-center">
-                    <Image src={dogImage} width={220} height={220} alt="K9" className="grayscale opacity-80" unoptimized />
-                  </div>
-                  <input 
-                    autoFocus 
-                    maxLength={6} 
-                    placeholder="000000" 
-                    className="w-full bg-black/80 text-center text-6xl p-8 rounded-[2rem] border border-white/10 text-blue-500 font-mono outline-none mb-8" 
-                    onChange={e => setDogCode(e.target.value)} 
-                  />
-                  <button onClick={handleFinalRedirect} className="w-full bg-blue-600 py-6 rounded-2xl font-black uppercase italic tracking-widest">
+                  <Image src={dogImage} width={220} height={220} alt="K9" className="mx-auto mb-10 grayscale opacity-80" unoptimized />
+                  <input autoFocus maxLength={6} placeholder="000000" className="w-full bg-black/80 text-center text-6xl p-8 rounded-[2rem] border border-white/10 text-blue-500 font-mono outline-none mb-8" onChange={e => setDogCode(e.target.value)} />
+                  <button onClick={handleFinalRedirect} className="w-full bg-blue-600 py-6 rounded-2xl font-black uppercase italic tracking-widest transition-all">
                     {loading ? <Loader2 className="animate-spin mx-auto" /> : "Grant Access"}
                   </button>
                   {error && <p className="mt-6 text-red-500 font-bold text-[9px] uppercase tracking-[0.3em]">{error}</p>}
@@ -277,7 +242,6 @@ function SignupFlow() {
             </motion.div>
           )}
 
-          {/* STEP 7: SUCCESS */}
           {step === 7 && (
             <motion.div key="s7" variants={fader} initial="initial" animate="animate" className="max-w-md mx-auto text-center">
                <div className="bg-zinc-950/90 backdrop-blur-3xl p-14 rounded-[4rem] border border-blue-500/30 shadow-2xl">
