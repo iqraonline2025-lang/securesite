@@ -6,7 +6,7 @@ import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   User, Building2, Accessibility, Loader2, Zap, 
-  Shield, Cpu, Fingerprint, CheckCircle2 
+  Shield, Cpu, Fingerprint, CheckCircle2, Lock 
 } from "lucide-react";
 import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
 import { loadStripe } from "@stripe/stripe-js";
@@ -54,6 +54,8 @@ export default function SignupPage() {
 function SignupFlow() {
   const router = useRouter();
   const [step, setStep] = useState(1);
+  const [isLoginMode, setIsLoginMode] = useState(false); // Toggle between Login/Signup
+  const [isAuthenticated, setIsAuthenticated] = useState(false); // Hard lock for redirect
   const [userType, setUserType] = useState(null);
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [clientSecret, setClientSecret] = useState("");
@@ -66,6 +68,12 @@ function SignupFlow() {
   const handleAuthSuccess = async (email) => {
     setLoading(true);
     setError("");
+    // If user is logging in, we skip payment/plan steps and go straight to verification
+    if (isLoginMode) {
+        generateCode();
+        return;
+    }
+
     if (selectedPlan?.price > 0 && userType === "individual") {
       try {
         const res = await fetch(`${API_BASE}/api/create-payment-intent`, {
@@ -100,7 +108,7 @@ function SignupFlow() {
     if (dogCode === generatedCode) {
       setLoading(true);
       setError("");
-      // Transition to Step 7 to clear all previous UI components
+      setIsAuthenticated(true); // LOCK THE UI
       setStep(7);
       setTimeout(() => {
         router.push("/dashboard");
@@ -110,6 +118,9 @@ function SignupFlow() {
       setError("CRITICAL_ERR: AUTH_KEY_MISMATCH");
     }
   };
+
+  // IF AUTHENTICATED, DON'T RENDER THE FLOW AT ALL
+  if (isAuthenticated && step !== 7) return <LoadingScreen />;
 
   return (
     <div className="relative flex items-center justify-center min-h-screen p-6">
@@ -165,7 +176,11 @@ function SignupFlow() {
           )}
 
           {step === 3 && (
-            <motion.div key="s3" variants={fader} initial="initial" animate="animate" exit="exit" className="max-w-md mx-auto w-full bg-zinc-950/80 backdrop-blur-3xl p-12 rounded-[4rem] border border-white/5 shadow-2xl">
+            <motion.div key="s3" variants={fader} initial="initial" animate="animate" exit="exit" className="max-w-md mx-auto w-full bg-zinc-950/80 backdrop-blur-3xl p-12 rounded-[4rem] border border-white/5 shadow-2xl text-center">
+               <h2 className="text-xl font-black italic uppercase mb-8 tracking-tighter">
+                 {isLoginMode ? "Secure Login" : "Initialize Protocol"}
+               </h2>
+               
                <div className="flex justify-center mb-10">
                   <GoogleLogin 
                     onSuccess={() => handleAuthSuccess(formData.email || "vault_user@auth.com")} 
@@ -173,9 +188,11 @@ function SignupFlow() {
                     shape="pill"
                   />
                </div>
+
                <div className="flex items-center gap-4 mb-10 opacity-20 text-[10px] uppercase font-black">
                   <div className="h-[1px] flex-1 bg-white" /> OR <div className="h-[1px] flex-1 bg-white" />
                </div>
+
                <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); handleAuthSuccess(formData.email); }}>
                   <div className="relative">
                     <input 
@@ -194,10 +211,20 @@ function SignupFlow() {
                     <Fingerprint className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-700" size={18} />
                   </div>
                   <button className="w-full bg-blue-600 hover:bg-blue-500 py-6 rounded-2xl font-black uppercase italic tracking-[0.3em] transition-all text-sm mt-4">
-                    {loading ? <Loader2 className="animate-spin mx-auto" /> : "Initiate Protocol"}
+                    {loading ? <Loader2 className="animate-spin mx-auto" /> : (isLoginMode ? "Access Vault" : "Initiate Protocol")}
                   </button>
                   {error && <p className="text-red-500 text-center text-[10px] mt-4 uppercase font-bold">{error}</p>}
                </form>
+
+               {/* LOGIN/SIGNUP TOGGLE */}
+               <div className="mt-8 pt-6 border-t border-white/5">
+                  <button 
+                    onClick={() => setIsLoginMode(!isLoginMode)}
+                    className="text-[10px] uppercase font-bold tracking-widest text-zinc-500 hover:text-blue-400 transition-colors"
+                  >
+                    {isLoginMode ? "New User? Create Account" : "Existing Member? Secure Login"}
+                  </button>
+               </div>
             </motion.div>
           )}
 
@@ -245,7 +272,6 @@ function SignupFlow() {
             </motion.div>
           )}
 
-          {/* STEP 7: FINAL SUCCESS STATE - PREVENTS FORM RE-RENDER */}
           {step === 7 && (
             <motion.div key="s7" variants={fader} initial="initial" animate="animate" className="max-w-md mx-auto text-center">
                <div className="bg-zinc-950/90 backdrop-blur-3xl p-14 rounded-[4rem] border border-blue-500/30 shadow-[0_0_40px_rgba(59,130,246,0.2)]">
@@ -284,7 +310,10 @@ function SignupFlow() {
 function LoadingScreen() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-[#020202]">
-      <Loader2 className="text-blue-500 animate-spin mb-4" size={40} />
+      <div className="relative mb-6">
+        <Loader2 className="text-blue-500 animate-spin" size={60} />
+        <Lock className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-blue-500/50" size={20} />
+      </div>
       <div className="text-zinc-700 font-mono text-[9px] uppercase tracking-[0.6em] animate-pulse">Establishing Secure Neural Link</div>
     </div>
   );
