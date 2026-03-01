@@ -1,31 +1,40 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
+import React, { useState, Suspense } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  User, Zap, Building2, GraduationCap,
-  Loader2, ArrowLeft, Mail, Lock, ShieldCheck
-} from "lucide-react";
+import { User, Building2, Accessibility, Loader2 } from "lucide-react";
 import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements } from "@stripe/react-stripe-js";
 import CheckoutForm from "../components/CheckoutForm";
 import dogImage from "../public/dog-4.png";
 
-/* ================= API & STRIPE ================= */
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://securesite-2fow.onrender.com";
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "");
+/* ================= CONFIG ================= */
 
-/* ================= Plans ================= */
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://securesite-2fow.onrender.com";
+
+const stripePromise = loadStripe(
+  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || ""
+);
+
+/* ================= PLANS ================= */
+
+const USER_TYPES = [
+  { id: "individual", label: "Individual", icon: User },
+  { id: "business", label: "Business", icon: Building2 },
+  { id: "accessibility", label: "Accessibility", icon: Accessibility },
+];
+
 const PLANS = [
-  { id: "free", tier: "Free", price: "£0", desc: "Basic scam alerts, basic tips, limited dashboard", category: "individual" },
-  { id: "pro", tier: "Pro", price: "£5", desc: "Priority alerts, faster notifications, extra resources, ad-free", category: "individual" },
-  { id: "premium", tier: "Premium", price: "£7", desc: "Advanced detection, analytics dashboard, scam history, priority support", category: "individual" },
-  { id: "business", tier: "Business", price: "£3,000–£6,000", desc: "Robotic dogs, dashboard, maintenance, monitoring, alerts, reports", category: "business" },
-  { id: "accessibility", tier: "Accessibility", price: "£500–£1,000", desc: "Supports disabled/vulnerable users. Social impact plan.", category: "accessibility" },
+  { id: "free", tier: "Free", price: 0, display: "£0", category: "individual" },
+  { id: "pro", tier: "Pro", price: 5, display: "£5 / mo", category: "individual" },
+  { id: "premium", tier: "Premium", price: 7, display: "£7 / mo", category: "individual" },
+  { id: "business", tier: "Business", price: 0, display: "Custom Pricing", category: "business" },
+  { id: "accessibility", tier: "Accessibility", price: 0, display: "Custom Pricing", category: "accessibility" },
 ];
 
 export default function SignupPage() {
@@ -40,240 +49,232 @@ export default function SignupPage() {
 
 function SignupContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
 
   const [step, setStep] = useState(1);
+  const [userType, setUserType] = useState(null);
   const [selectedPlan, setSelectedPlan] = useState(null);
-  const [userType, setUserType] = useState("individual"); // Default: individual
-  const [isLogin, setIsLogin] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [clientSecret, setClientSecret] = useState("");
-  const [formData, setFormData] = useState({ name: "", email: "", password: "" });
+  const [loading, setLoading] = useState(false);
   const [dogCode, setDogCode] = useState("");
-  const [dogError, setDogError] = useState("");
+  const [error, setError] = useState("");
 
-  // Filter plans based on userType
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    password: "",
+  });
+
   const visiblePlans = PLANS.filter(p => p.category === userType);
 
-  useEffect(() => {
-    const planId = searchParams.get("plan");
-    if (planId) {
-      const found = PLANS.find(p => p.id === planId);
-      if (found) {
-        setSelectedPlan(found);
-        setUserType(found.category);
-      }
-    }
-  }, [searchParams]);
+  /* ================= PAYMENT ================= */
 
-  const initPayment = async (tier, email) => {
+  const initPayment = async () => {
+    const res = await fetch(`${API_BASE}/api/create-payment-intent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ planTier: selectedPlan.tier, email: formData.email }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message);
+
+    setClientSecret(data.clientSecret);
+    setStep(4);
+  };
+
+  /* ================= EMAIL SIGNUP ================= */
+
+  const handleSignup = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+
     try {
-      const res = await fetch(`${API_BASE}/api/create-payment-intent`, {
+      const res = await fetch(`${API_BASE}/api/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planTier: tier, email }),
+        body: JSON.stringify({ ...formData, planTier: selectedPlan.tier }),
       });
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.message);
-      setClientSecret(data.clientSecret);
-      setStep(3);
+
+      setStep(3); // VERIFY FIRST
     } catch (err) {
-      alert(err.message || "Payment failed");
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleGoogleAuth = async (cred) => {
-    setLoading(true);
+  /* ================= GOOGLE AUTH ================= */
+
+  const handleGoogle = async (credentialResponse) => {
     try {
+      setLoading(true);
+
       const res = await fetch(`${API_BASE}/api/google-login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: cred.credential, planTier: selectedPlan?.tier }),
+        body: JSON.stringify({
+          token: credentialResponse.credential,
+          planTier: selectedPlan.tier,
+        }),
       });
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.message);
 
       setFormData(prev => ({ ...prev, email: data.user.email }));
-
-      if (selectedPlan.category === "individual") {
-        localStorage.setItem("user", JSON.stringify(data.user));
-        router.push("/dashboard");
-      } else if (["business", "accessibility"].includes(selectedPlan.category)) {
-        setStep(3);
-      } else {
-        await initPayment(selectedPlan.tier, data.user.email);
-      }
+      setStep(3);
     } catch (err) {
-      alert(err.message);
+      setError("Google authentication failed");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAuthSubmit = async (e) => {
+  /* ================= VERIFY ================= */
+
+  const handleVerify = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    try {
-      const endpoint = isLogin ? "/api/login" : "/api/signup";
-      const res = await fetch(`${API_BASE}${endpoint}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...formData, planTier: selectedPlan?.tier }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
+    setError("");
 
-      setFormData(prev => ({ ...prev, email: data.user.email }));
-
-      if (selectedPlan.category === "individual") {
-        localStorage.setItem("user", JSON.stringify(data.user));
-        router.push("/dashboard");
-      } else if (["business", "accessibility"].includes(selectedPlan.category)) {
-        setStep(3);
-      } else {
-        await initPayment(selectedPlan.tier, data.user.email);
-      }
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDogCodeSubmit = async (e) => {
-    e.preventDefault();
     try {
       const res = await fetch(`${API_BASE}/api/verify-code`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: formData.email, code: dogCode }),
       });
+
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Invalid code");
-      localStorage.setItem("user", JSON.stringify(data.user || { email: formData.email }));
-      router.push("/dashboard");
+      if (!res.ok) throw new Error("Invalid code");
+
+      if (
+        selectedPlan.price === 0 ||
+        selectedPlan.category !== "individual"
+      ) {
+        localStorage.setItem("user", JSON.stringify(data.user));
+        router.push("/dashboard");
+      } else {
+        await initPayment();
+      }
     } catch (err) {
-      setDogError("Invalid verification code");
+      setError(err.message);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] text-zinc-100 flex flex-col items-center justify-center p-6 relative overflow-hidden">
-      {/* Background blur elements */}
-      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-blue-600/10 blur-[120px] rounded-full pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-purple-600/10 blur-[120px] rounded-full pointer-events-none" />
-
-      {/* Top navigation */}
-      <div className="fixed top-8 left-8 z-50">
-        <Link href="/">
-          <button className="flex items-center gap-2 bg-zinc-900/50 hover:bg-zinc-800 border border-white/5 px-4 py-2 rounded-full transition-all text-sm font-medium backdrop-blur-md">
-            <ArrowLeft size={16} /> Exit
-          </button>
-        </Link>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-black via-zinc-950 to-black text-white flex items-center justify-center p-6">
 
       <AnimatePresence mode="wait">
-        {/* STEP 1: SELECT USER TYPE */}
-        {step === 1 && (
-          <motion.div key="type" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-            <h1 className="text-5xl md:text-7xl font-black tracking-tighter mb-12 text-center bg-clip-text text-transparent bg-gradient-to-b from-white to-zinc-500">
-              Select Your User Type
-            </h1>
-            <div className="flex justify-center gap-4 mb-12">
-              <button onClick={() => setUserType("individual")} className="px-4 py-2 bg-blue-500 text-white rounded-lg">Individual</button>
-              <button onClick={() => setUserType("business")} className="px-4 py-2 bg-purple-500 text-white rounded-lg">Business</button>
-              <button onClick={() => setUserType("accessibility")} className="px-4 py-2 bg-green-500 text-white rounded-lg">Accessibility</button>
-            </div>
 
-            {/* Display plans for selected type */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {visiblePlans.map(p => (
-                <motion.div
-                  key={p.id}
-                  whileHover={{ y: -8 }}
-                  onClick={() => { setSelectedPlan(p); setStep(2); }}
-                  className="relative p-8 rounded-3xl border border-white/5 bg-zinc-900/20 cursor-pointer"
+        {/* ================= STEP 1 USER TYPE ================= */}
+        {step === 1 && (
+          <motion.div key="type" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-4xl w-full">
+            <h1 className="text-4xl font-bold text-center mb-10">
+              Choose Your Account Type
+            </h1>
+
+            <div className="grid md:grid-cols-3 gap-6">
+              {USER_TYPES.map(type => {
+                const Icon = type.icon;
+                return (
+                  <div
+                    key={type.id}
+                    onClick={() => {
+                      setUserType(type.id);
+                      setStep(2);
+                    }}
+                    className="bg-zinc-900 border border-zinc-800 hover:border-blue-500 transition p-8 rounded-3xl cursor-pointer text-center hover:scale-105"
+                  >
+                    <Icon size={36} className="mx-auto mb-4 text-blue-400" />
+                    <h2 className="text-2xl font-semibold">{type.label}</h2>
+                  </div>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+
+        {/* ================= STEP 2 PLANS ================= */}
+        {step === 2 && (
+          <motion.div key="plans" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-4xl w-full">
+            <h2 className="text-3xl font-bold text-center mb-8 capitalize">
+              {userType} Plans
+            </h2>
+
+            <div className="grid md:grid-cols-3 gap-6">
+              {visiblePlans.map(plan => (
+                <div
+                  key={plan.id}
+                  onClick={() => {
+                    setSelectedPlan(plan);
+                    setStep(3);
+                  }}
+                  className="bg-zinc-900 border border-zinc-800 hover:border-blue-500 p-8 rounded-3xl cursor-pointer hover:scale-105 transition"
                 >
-                  <h3 className="text-2xl font-bold mb-2">{p.tier}</h3>
-                  <p className="text-zinc-400 text-sm mb-6">{p.desc}</p>
-                  <div className="text-xl font-black">{p.price}</div>
-                </motion.div>
+                  <h3 className="text-xl font-bold mb-4">{plan.tier}</h3>
+                  <p className="text-3xl font-black">{plan.display}</p>
+                </div>
               ))}
             </div>
           </motion.div>
         )}
 
-        {/* STEP 2: AUTH */}
-        {step === 2 && selectedPlan && (
-          <motion.div key="auth" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}>
-            <div className="max-w-md w-full bg-zinc-900/40 border border-white/10 p-10 rounded-[2.5rem] backdrop-blur-2xl shadow-2xl">
-              <div className="text-center mb-8">
-                <div className="text-xs font-bold uppercase tracking-[0.2em] text-blue-500 mb-2">Plan: {selectedPlan.tier}</div>
-                <h2 className="text-3xl font-bold">{isLogin ? "Welcome Back" : "Create Account"}</h2>
-              </div>
+        {/* ================= STEP 3 SIGNUP ================= */}
+        {step === 3 && !selectedPlan && null}
 
-              <GoogleLogin onSuccess={handleGoogleAuth} theme="filled_black" shape="pill" width="100%" />
+        {step === 3 && selectedPlan && (
+          <motion.div key="auth" className="w-full max-w-md bg-zinc-900 p-8 rounded-3xl border border-zinc-800">
+            <GoogleLogin onSuccess={handleGoogle} onError={() => setError("Google failed")} />
 
-              <div className="relative flex items-center my-6">
-                <div className="flex-grow border-t border-white/5"></div>
-                <span className="mx-4 text-[10px] uppercase text-zinc-500 font-bold">Or continue with email</span>
-                <div className="flex-grow border-t border-white/5"></div>
-              </div>
+            <div className="text-center text-zinc-500 my-4">OR</div>
 
-              <form onSubmit={handleAuthSubmit} className="space-y-4">
-                {!isLogin && (
-                  <div className="relative">
-                    <User className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
-                    <input required placeholder="Full Name" className="w-full pl-12 py-4 rounded-2xl bg-black/40 border border-white/5" onChange={e => setFormData({ ...formData, name: e.target.value })} />
-                  </div>
-                )}
-                <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
-                  <input required type="email" placeholder="Email" className="w-full pl-12 py-4 rounded-2xl bg-black/40 border border-white/5" onChange={e => setFormData({ ...formData, email: e.target.value })} />
-                </div>
-                <div className="relative">
-                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
-                  <input required type="password" placeholder="Password" className="w-full pl-12 py-4 rounded-2xl bg-black/40 border border-white/5" onChange={e => setFormData({ ...formData, password: e.target.value })} />
-                </div>
-                <button disabled={loading} className="w-full bg-blue-600 py-4 rounded-2xl text-white font-bold flex justify-center items-center gap-2">
-                  {loading ? <Loader2 className="animate-spin" /> : (isLogin ? "Sign In" : "Create Account")}
-                </button>
-              </form>
+            <form onSubmit={handleSignup} className="space-y-4">
+              <input required placeholder="Full Name" className="w-full p-3 bg-black border border-zinc-800 rounded-xl"
+                onChange={e => setFormData({ ...formData, name: e.target.value })}
+              />
+              <input required type="email" placeholder="Email" className="w-full p-3 bg-black border border-zinc-800 rounded-xl"
+                onChange={e => setFormData({ ...formData, email: e.target.value })}
+              />
+              <input required type="password" placeholder="Password" className="w-full p-3 bg-black border border-zinc-800 rounded-xl"
+                onChange={e => setFormData({ ...formData, password: e.target.value })}
+              />
 
-              <button onClick={() => setIsLogin(!isLogin)} className="mt-6 text-xs text-zinc-500 hover:text-zinc-300 w-full transition-colors">
-                {isLogin ? "Need an account? Sign Up" : "Already registered? Log In"}
+              {error && <p className="text-red-500 text-sm">{error}</p>}
+
+              <button className="w-full bg-blue-600 hover:bg-blue-700 p-3 rounded-xl font-semibold">
+                {loading ? <Loader2 className="animate-spin mx-auto" /> : "Continue"}
               </button>
-            </div>
+            </form>
           </motion.div>
         )}
 
-        {/* STEP 3: DOG VERIFICATION */}
-        {step === 3 && ["business", "accessibility"].includes(selectedPlan?.category) && (
-          <DogVerification
-            formData={formData}
-            dogCode={dogCode}
-            setDogCode={setDogCode}
-            dogError={dogError}
-            handleDogCodeSubmit={handleDogCodeSubmit}
-          />
+        {/* ================= STEP 4 VERIFY ================= */}
+        {step === 4 && !clientSecret && (
+          <motion.div key="verify" className="w-full max-w-md bg-zinc-900 p-8 rounded-3xl border border-zinc-800 text-center">
+            <Image src={dogImage} alt="verification" width={120} className="mx-auto mb-6" />
+            <form onSubmit={handleVerify} className="space-y-4">
+              <input maxLength={6} placeholder="Enter 6-digit code"
+                className="w-full p-4 text-center bg-black border border-zinc-800 rounded-xl text-xl"
+                onChange={(e) => setDogCode(e.target.value)}
+              />
+              {error && <p className="text-red-500 text-sm">{error}</p>}
+              <button className="w-full bg-white text-black p-3 rounded-xl font-bold">
+                Verify Code
+              </button>
+            </form>
+          </motion.div>
         )}
 
-        {/* STEP 3: PAYMENT */}
-        {step === 3 && selectedPlan?.category === "individual" && selectedPlan.id === "premium" && clientSecret && (
-          <motion.div key="payment" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-md w-full">
-            <div className="bg-zinc-900/40 border border-white/10 p-10 rounded-[2.5rem] backdrop-blur-xl">
-              <div className="text-center mb-8">
-                <ShieldCheck className="mx-auto text-blue-500 mb-4" size={40} />
-                <h2 className="text-2xl font-bold">Secure Checkout</h2>
-                <p className="text-zinc-500 text-sm mt-1">Tier: {selectedPlan.tier} Plan</p>
-              </div>
-              <Elements stripe={stripePromise} options={{ clientSecret, appearance: { theme: 'night' } }}>
-                <CheckoutForm
-                  amount={selectedPlan.price.replace("£", "")}
-                  onSuccess={user => { localStorage.setItem("user", JSON.stringify(user)); router.push("/dashboard"); }}
-                />
-              </Elements>
-            </div>
+        {/* ================= STEP 5 CHECKOUT ================= */}
+        {step === 4 && clientSecret && (
+          <motion.div key="checkout" className="w-full max-w-md bg-zinc-900 p-8 rounded-3xl border border-zinc-800">
+            <h2 className="text-2xl font-bold text-center mb-6">Secure Checkout</h2>
+            <Elements stripe={stripePromise} options={{ clientSecret }}>
+              <CheckoutForm onSuccess={() => router.push("/dashboard")} />
+            </Elements>
           </motion.div>
         )}
 
@@ -282,49 +283,10 @@ function SignupContent() {
   );
 }
 
-/* ================= Dog Verification ================= */
-function DogVerification({ formData, dogCode, setDogCode, dogError, handleDogCodeSubmit }) {
-  return (
-    <motion.div key="dog" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-md w-full">
-      <div className="bg-zinc-950 border border-white/10 rounded-[2.5rem] p-10 shadow-2xl">
-        <div className="bg-zinc-900/50 p-8 rounded-3xl border border-white/5 mb-8">
-          <Image src={dogImage} width={180} height={180} alt="robotic unit" className="mx-auto drop-shadow-2xl" unoptimized />
-        </div>
-
-        <div className="text-center mb-8">
-          <h3 className="text-2xl font-bold tracking-tight mb-2">Security Verification</h3>
-          <p className="text-zinc-500 text-sm leading-relaxed px-4">
-            Enter the 6-digit key sent to <br/>
-            <span className="text-zinc-200 font-mono text-xs">{formData.email}</span>
-          </p>
-        </div>
-
-        <form onSubmit={handleDogCodeSubmit} className="space-y-6">
-          <input
-            value={dogCode}
-            onChange={e => setDogCode(e.target.value)}
-            maxLength={6}
-            placeholder="000000"
-            className="w-full p-6 rounded-2xl bg-black border border-white/10 text-center font-mono text-4xl tracking-[0.4em] text-blue-400 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all"
-          />
-          {dogError && <p className="text-red-500 text-center text-xs font-bold">{dogError}</p>}
-          <button className="w-full bg-white hover:bg-zinc-200 text-black font-black py-4 rounded-2xl transition-all shadow-xl">
-            VERIFY IDENTITY
-          </button>
-        </form>
-      </div>
-    </motion.div>
-  );
-}
-
-/* ================= Loading ================= */
 function LoadingScreen() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#050505]">
-      <div className="relative">
-        <Loader2 className="animate-spin text-blue-500" size={48} />
-        <div className="absolute inset-0 blur-xl bg-blue-500/20 rounded-full animate-pulse" />
-      </div>
+    <div className="min-h-screen flex items-center justify-center bg-black">
+      <Loader2 className="animate-spin text-blue-500" size={48} />
     </div>
   );
 }
