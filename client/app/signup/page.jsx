@@ -6,7 +6,7 @@ import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   User, Building2, Accessibility, Loader2, Zap, 
-  Shield, Cpu, Fingerprint, CheckCircle2, LayoutDashboard, Settings, Activity
+  Shield, Cpu, Fingerprint, CheckCircle2 
 } from "lucide-react";
 import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
 import { loadStripe } from "@stripe/stripe-js";
@@ -16,7 +16,8 @@ import { Elements } from "@stripe/react-stripe-js";
 import CheckoutForm from "../components/CheckoutForm"; 
 import dogImage from "../public/dog-4.png";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://securesite-2fow.onrender.com";
+// Updated Backend URL
+const API_BASE = "https://securesite-10.onrender.com";
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "");
 
 const USER_TYPES = [
@@ -67,26 +68,34 @@ function SignupFlow() {
     setLoading(true);
     setError("");
     
-    // Only Paid Individual plans go to Stripe step
     if (selectedPlan?.price > 0 && userType === "individual") {
       try {
         const res = await fetch(`${API_BASE}/api/create-payment-intent`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ planTier: selectedPlan.tier, email }),
+          body: JSON.stringify({ 
+            planTier: selectedPlan.tier, 
+            email: email 
+          }),
         });
+
+        if (!res.ok) {
+          const errorData = await res.json();
+          throw new Error(errorData.message || "Backend Protocol Error (400)");
+        }
+
         const data = await res.json();
         if (data.clientSecret) {
           setClientSecret(data.clientSecret);
           setStep(4);
         }
       } catch (err) {
-        setError("NETWORK_FAILURE: SECURITY_PROTOCOL_UNREACHABLE");
+        setError(err.message);
       } finally {
         setLoading(false);
       }
     } else {
-      generateCode(); // Free, Biz, and Acc skip to code reveal
+      generateCode();
     }
   };
 
@@ -101,7 +110,6 @@ function SignupFlow() {
     if (dogCode === generatedCode) {
       setLoading(true);
       setError("");
-      // Immediate Security Handshake and Redirect
       setTimeout(() => {
         router.push("/dashboard");
       }, 1500);
@@ -121,7 +129,6 @@ function SignupFlow() {
       <div className="w-full max-w-6xl relative z-10">
         <AnimatePresence mode="wait">
           
-          {/* STEP 1: CATEGORIES */}
           {step === 1 && (
             <motion.div key="s1" variants={fader} initial="initial" animate="animate" exit="exit" className="grid md:grid-cols-3 gap-6">
               {USER_TYPES.map((type) => (
@@ -131,7 +138,7 @@ function SignupFlow() {
                   onClick={() => { setUserType(type.id); setStep(2); }}
                   className="cursor-pointer bg-zinc-900/20 backdrop-blur-xl border border-white/10 p-12 rounded-[3.5rem] group text-center transition-all duration-300 shadow-2xl"
                 >
-                  <type.icon size={52} className="mx-auto mb-8 text-blue-500 group-hover:scale-110 group-hover:drop-shadow-[0_0_15px_rgba(59,130,246,0.5)] transition-all" />
+                  <type.icon size={52} className="mx-auto mb-8 text-blue-500 group-hover:scale-110 transition-all" />
                   <h2 className="text-2xl font-black italic uppercase tracking-tighter mb-2">{type.label}</h2>
                   <p className="text-zinc-500 text-[10px] font-mono uppercase tracking-[0.3em]">{type.desc}</p>
                 </motion.div>
@@ -139,40 +146,32 @@ function SignupFlow() {
             </motion.div>
           )}
 
-          {/* STEP 2: PRICING CARDS */}
           {step === 2 && (
             <motion.div key="s2" variants={fader} initial="initial" animate="animate" exit="exit" className="flex flex-wrap justify-center gap-6">
               {PLANS.filter(p => p.category === userType).map((plan) => (
                 <div key={plan.id} onClick={() => { setSelectedPlan(plan); setStep(3); }}
                   className="w-full max-w-[340px] flex flex-col bg-zinc-900/30 backdrop-blur-3xl border border-white/5 p-10 rounded-[3.5rem] hover:border-blue-500/50 transition-all duration-500 cursor-pointer group shadow-2xl relative overflow-hidden min-h-[550px]"
                 >
-                  <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
-                    <Shield size={100} />
-                  </div>
-                  
                   <h3 className="text-blue-400 font-black uppercase text-[10px] tracking-[0.3em] mb-4">{plan.tier}</h3>
                   <div className="text-7xl font-black italic mb-10 tracking-tighter">
                     {plan.display}
                     <span className="text-xs font-normal text-zinc-600 not-italic tracking-widest ml-2">/ ACCESS</span>
                   </div>
-
-                  <div className="space-y-4 mb-10 flex-grow">
+                  <div className="space-y-4 mb-10 flex-grow text-zinc-400 text-[13px]">
                     {plan.features.map(f => (
-                      <div key={f} className="flex items-center gap-4 text-zinc-400 text-[13px] font-medium leading-tight">
+                      <div key={f} className="flex items-center gap-4">
                         <CheckCircle2 size={16} className="text-blue-500 shrink-0" /> {f}
                       </div>
                     ))}
                   </div>
-
                   <div className="relative h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                    <div className="absolute top-0 left-0 h-full w-14 bg-blue-600 group-hover:w-full transition-all duration-1000 ease-out" />
+                    <div className="absolute top-0 left-0 h-full w-14 bg-blue-600 group-hover:w-full transition-all duration-1000" />
                   </div>
                 </div>
               ))}
             </motion.div>
           )}
 
-          {/* STEP 3: AUTH */}
           {step === 3 && (
             <motion.div key="s3" variants={fader} initial="initial" animate="animate" exit="exit" className="max-w-md mx-auto w-full bg-zinc-950/80 backdrop-blur-3xl p-12 rounded-[4rem] border border-white/5 shadow-2xl">
                <div className="flex justify-center mb-10">
@@ -182,14 +181,14 @@ function SignupFlow() {
                     shape="pill"
                   />
                </div>
-               <div className="flex items-center gap-4 mb-10 opacity-20 text-[10px] font-black uppercase tracking-[0.4em]">
+               <div className="flex items-center gap-4 mb-10 opacity-20 text-[10px] uppercase font-black">
                   <div className="h-[1px] flex-1 bg-white" /> OR <div className="h-[1px] flex-1 bg-white" />
                </div>
                <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); handleAuthSuccess(formData.email); }}>
                   <div className="relative">
                     <input 
                       type="email" required placeholder="SECURE_EMAIL" 
-                      className="w-full bg-black/60 border border-white/5 p-5 rounded-2xl outline-none focus:border-blue-500/50 transition-all font-mono text-xs tracking-widest pl-12" 
+                      className="w-full bg-black/60 border border-white/5 p-5 rounded-2xl outline-none focus:border-blue-500/50 transition-all font-mono text-xs pl-12" 
                       onChange={e => setFormData({...formData, email: e.target.value})} 
                     />
                     <Zap className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-700" size={18} />
@@ -197,19 +196,19 @@ function SignupFlow() {
                   <div className="relative">
                     <input 
                       type="password" required placeholder="ACCESS_KEY" 
-                      className="w-full bg-black/60 border border-white/5 p-5 rounded-2xl outline-none focus:border-blue-500/50 transition-all font-mono text-xs tracking-widest pl-12" 
+                      className="w-full bg-black/60 border border-white/5 p-5 rounded-2xl outline-none focus:border-blue-500/50 transition-all font-mono text-xs pl-12" 
                       onChange={e => setFormData({...formData, password: e.target.value})} 
                     />
                     <Fingerprint className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-700" size={18} />
                   </div>
-                  <button className="w-full bg-blue-600 hover:bg-blue-500 py-6 rounded-2xl font-black uppercase italic tracking-[0.3em] shadow-blue-600/20 active:scale-95 transition-all text-sm mt-4">
+                  <button className="w-full bg-blue-600 hover:bg-blue-500 py-6 rounded-2xl font-black uppercase italic tracking-[0.3em] transition-all text-sm mt-4">
                     {loading ? <Loader2 className="animate-spin mx-auto" /> : "Initiate Protocol"}
                   </button>
+                  {error && <p className="text-red-500 text-center text-[10px] mt-4 uppercase font-bold">{error}</p>}
                </form>
             </motion.div>
           )}
 
-          {/* STEP 4: STRIPE CHECKOUT */}
           {step === 4 && (
             <motion.div key="s4" variants={fader} initial="initial" animate="animate" exit="exit" className="max-w-md mx-auto w-full">
               <div className="bg-[#080808] border border-blue-500/20 p-12 rounded-[4rem] shadow-2xl">
@@ -220,41 +219,33 @@ function SignupFlow() {
             </motion.div>
           )}
 
-          {/* STEP 5: CODE GENERATED */}
           {step === 5 && (
             <motion.div key="s5" variants={fader} initial="initial" animate="animate" exit="exit" className="max-w-md mx-auto text-center">
                <div className="bg-zinc-950/90 backdrop-blur-3xl p-14 rounded-[4rem] border border-white/5 shadow-3xl">
                   <Cpu size={50} className="mx-auto mb-8 text-blue-500 animate-pulse" />
-                  <h2 className="text-2xl font-black uppercase italic mb-8 tracking-tighter">Encryption Issued</h2>
+                  <h2 className="text-2xl font-black uppercase italic mb-8">Encryption Issued</h2>
                   <div className="bg-black/80 py-12 rounded-[2rem] border border-white/5 shadow-inner">
                     <span className="text-5xl font-mono text-blue-400 tracking-[0.4em] font-black">{generatedCode}</span>
                   </div>
-                  <button onClick={() => setStep(6)} className="mt-12 w-full bg-white text-black py-6 rounded-2xl font-black uppercase tracking-[0.2em] hover:scale-105 transition-transform text-xs">Verify Biometrics</button>
+                  <button onClick={() => setStep(6)} className="mt-12 w-full bg-white text-black py-6 rounded-2xl font-black uppercase tracking-widest text-xs">Verify Biometrics</button>
                </div>
             </motion.div>
           )}
 
-          {/* STEP 6: K9 SENTRY VERIFICATION */}
           {step === 6 && (
             <motion.div key="s6" variants={fader} initial="initial" animate="animate" exit="exit" className="max-w-md mx-auto text-center">
                <div className="bg-zinc-950/90 backdrop-blur-3xl p-14 rounded-[4rem] border border-white/5 shadow-3xl relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-full h-1 bg-blue-500/30 shadow-[0_0_20px_blue] animate-scan" />
                   <div className="mb-10 relative inline-block group">
                     <Image src={dogImage} width={220} height={220} alt="K9" className="grayscale group-hover:grayscale-0 transition-all duration-1000" unoptimized />
-                    <div className="absolute inset-0 bg-blue-500/5 mix-blend-overlay rounded-full" />
                   </div>
                   <form onSubmit={(e) => { e.preventDefault(); handleFinalRedirect(); }}>
                     <input autoFocus maxLength={6} placeholder="000000" 
-                      className="w-full bg-black/80 text-center text-6xl p-8 rounded-[2rem] border border-white/10 text-blue-500 font-mono outline-none focus:border-blue-500/50 mb-8 tracking-tighter shadow-inner" 
+                      className="w-full bg-black/80 text-center text-6xl p-8 rounded-[2rem] border border-white/10 text-blue-500 font-mono outline-none focus:border-blue-500/50 mb-8 tracking-tighter" 
                       onChange={e => { setError(""); setDogCode(e.target.value); }} 
                     />
-                    <button className="w-full bg-blue-600 py-6 rounded-2xl font-black uppercase italic tracking-widest text-white shadow-xl shadow-blue-600/30 hover:bg-blue-500 transition-colors">
-                      {loading ? (
-                        <div className="flex items-center justify-center gap-3">
-                          <Loader2 className="animate-spin" size={20} />
-                          <span>SYNCHRONIZING...</span>
-                        </div>
-                      ) : "Grant Access"}
+                    <button className="w-full bg-blue-600 py-6 rounded-2xl font-black uppercase italic tracking-widest text-white hover:bg-blue-500 transition-colors">
+                      {loading ? <Loader2 className="animate-spin mx-auto" /> : "Grant Access"}
                     </button>
                     {error && <p className="mt-6 text-red-500 font-bold text-[9px] uppercase tracking-[0.3em]">{error}</p>}
                   </form>
