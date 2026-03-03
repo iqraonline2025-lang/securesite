@@ -31,32 +31,169 @@ export default function SecurityApp() {
   const [generatedCode, setGeneratedCode] = useState("");
   const [enteredCode, setEnteredCode] = useState("");
 
-  // Auto-redirect if already verified
-  useEffect(() => {
-    if (localStorage.getItem("isVerified") === "true") {
-      router.replace("/dashboard");
-    }
-  }, [router]);
-
   const categories = [
     { id: "individual", name: "Individual", icon: Globe, desc: "Personal Vault" },
     { id: "business", name: "Business", icon: Briefcase, desc: "Enterprise Node" },
     { id: "accessibility", name: "Accessibility", icon: Accessibility, desc: "Universal Access" }
   ];
 
-  const planData = {
-    individual: [
-      { id: "free", name: "Standard", price: "£0", features: ["Basic Encryption", "1 Device"] },
-      { id: "pro", name: "Pro Vault", price: "£5", features: ["Biometric Sync", "256-bit AES"] },
-      { id: "premium", name: "Elite Guard", price: "£7", features: ["Quantum Safe", "Dedicated Node"] },
-    ],
-    business: [
-      { id: "business", name: "Enterprise", price: "£3000", features: ["Team Gateway", "API Access", "24/7 Support"] }
-    ],
-    accessibility: [
-      { id: "accessibility", name: "Universal", price: "£500", features: ["Voice Navigation", "Haptic Alerts", "Specialist Setup"] }
-    ]
-  };
+ const planData = {
+
+  individual: [
+
+    {
+
+      id: "free",
+
+      name: "Free Plan",
+
+      price: "£0",
+
+      purpose: "Basic protection for all users",
+
+      features: [
+
+        "Basic scam alerts",
+
+        "Basic safety tips",
+
+        "Limited dashboard",
+
+        "Limited learning resources"
+
+      ]
+
+    },
+
+    {
+
+      id: "pro",
+
+      name: "Pro Plan",
+
+      price: "£5",
+
+      purpose: "Affordable upgrade for everyday users",
+
+      impact: "SDG 9.1: Low-cost digital safety infrastructure",
+
+      features: [
+
+        "Everything in Free",
+
+        "Priority scam alerts",
+
+        "Faster notifications",
+
+        "Extra learning resources",
+
+        "Ad-free experience"
+
+      ]
+
+    },
+
+    {
+
+      id: "premium",
+
+      name: "Premium Plan",
+
+      price: "£7",
+
+      purpose: "Full protection for advanced security",
+
+      features: [
+
+        "Everything in Pro",
+
+        "Advanced scam detection",
+
+        "Analytics dashboard",
+
+        "Scam history + risk level",
+
+        "Early access to new features",
+
+        "Priority support"
+
+      ]
+
+    }
+
+  ],
+
+  business: [
+
+    {
+
+      id: "business",
+
+      name: "Monthly Business Plan",
+
+      price: "£3,000–£6,000",
+
+      purpose: "Main plan for businesses paying monthly",
+
+      features: [
+
+        "Robotic dogs (choice of model)",
+
+        "SecureMe App (dog connectivity)",
+
+        "Maintenance & Repairs",
+
+        "24/7 Support",
+
+        "Software updates",
+
+        "Training + setup",
+
+        "Monitoring dashboard",
+
+        "Patrol routes + alerts",
+
+        "Reports + logs"
+
+      ]
+
+    }
+
+  ],
+
+  accessibility: [
+
+    {
+
+      id: "accessibility",
+
+      name: "Accessibility & Disability Plan",
+
+      price: "Contact for Pricing", // Specified as a Social Impact Partnership Model
+
+      purpose: "Social impact partnership for vulnerable users",
+
+      features: [
+
+        "Support for disabled individuals",
+
+        "Vulnerable user monitoring",
+
+        "Mobility issue assistance",
+
+        "Physical assistance integration",
+
+        "Safety monitoring",
+
+        "Subsidized technology for low-income"
+
+      ]
+
+    }
+
+  ]
+
+}; 
 
   // Manual auth handler
   const handleAuth = () => {
