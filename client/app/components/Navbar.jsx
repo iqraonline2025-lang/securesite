@@ -3,7 +3,11 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { gsap } from "gsap";
 import { ScrollToPlugin } from "gsap/ScrollToPlugin";
-import { Menu, X, Shield } from "lucide-react";
+import { Menu, X } from "lucide-react"; // Removed Shield since we are using the logo
+import Image from "next/image"; // Recommended for Next.js optimization
+
+// 1. IMPORT YOUR LOGO HERE
+import Logo from "../public/logo-1.jpeg"; // Adjust the path/filename as needed
 
 const navLinks = [
   { name: "Home", href: "#home", id: "home" },
@@ -56,28 +60,32 @@ export default function Navbar() {
         scrollTo: { y: target, offsetY: 80 },
         ease: "power2.inOut",
       });
-      setIsMobileMenuOpen(false); // Close menu on click
+      setIsMobileMenuOpen(false);
     }
   };
 
   return (
     <>
-      {/* 1️⃣ DESKTOP & BASE NAVBAR 
-          Tailwind 'md:' classes handle the media queries.
-      */}
       <nav className="sticky top-0 w-full z-[999] h-20 bg-black/80 backdrop-blur-xl border-b border-white/10 flex items-center px-4 md:px-12 justify-between">
         
-        {/* LOGO */}
+        {/* LOGO SECTION */}
         <div onClick={() => window.location.href = "/"} className="flex items-center gap-3 cursor-pointer shrink-0">
-          <div className="w-10 h-10 flex items-center justify-center bg-blue-600/20 rounded-xl border border-blue-500/30">
-            <Shield size={22} className="text-blue-500" />
+          <div className="w-10 h-10 relative flex items-center justify-center overflow-hidden rounded-xl">
+            {/* 2. LOGO IMAGE IMPLEMENTATION */}
+            <Image 
+              src={Logo} 
+              alt="SecureMe Logo" 
+              className="object-contain" 
+              fill
+              priority
+            />
           </div>
           <span className="text-lg md:text-xl font-bold text-white tracking-tighter">
             Secure<span className="text-blue-500">Me</span>
           </span>
         </div>
 
-        {/* 2️⃣ DESKTOP LINKS - Hidden on small screens (hidden md:flex) */}
+        {/* DESKTOP LINKS */}
         <ul className="hidden md:flex items-center gap-8 lg:gap-10">
           {navLinks.map((link) => (
             <li key={link.name} className="relative h-20 flex items-center">
@@ -100,7 +108,7 @@ export default function Navbar() {
           ))}
         </ul>
 
-        {/* 3️⃣ RIGHT SIDE ACTIONS */}
+        {/* ACTIONS */}
         <div className="flex items-center gap-2 md:gap-4">
           {!isLoggedIn ? (
             <>
@@ -126,7 +134,6 @@ export default function Navbar() {
             </button>
           )}
 
-          {/* 4️⃣ HAMBURGER ICON - Visible only on small screens (md:hidden) */}
           <button 
             className="md:hidden p-2 text-zinc-400 hover:text-white transition-colors" 
             onClick={() => setIsMobileMenuOpen(true)}
@@ -136,7 +143,6 @@ export default function Navbar() {
         </div>
       </nav>
 
-      {/* 5️⃣ MOBILE MENU OVERLAY */}
       <AnimatePresence>
         {isMobileMenuOpen && (
           <motion.div 
@@ -146,14 +152,12 @@ export default function Navbar() {
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
             className="fixed inset-0 bg-black z-[1000] p-6 flex flex-col"
           >
-            {/* CLOSE BUTTON */}
             <div className="flex justify-end">
               <button onClick={() => setIsMobileMenuOpen(false)} className="text-white p-2">
                 <X size={32} />
               </button>
             </div>
 
-            {/* MOBILE NAV LINKS */}
             <div className="flex flex-col gap-8 mt-12">
               {navLinks.map((link, index) => (
                 <motion.a 
@@ -172,7 +176,6 @@ export default function Navbar() {
               ))}
             </div>
 
-            {/* MOBILE FOOTER AUTH */}
             <div className="mt-auto pb-10 flex flex-col gap-4">
               <button 
                 onClick={() => window.location.href = "/login"}

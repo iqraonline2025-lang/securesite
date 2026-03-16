@@ -1,111 +1,81 @@
-// index.js
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import path from "path";
-import fs from "fs";
-
 import authRoutes from "./routes/auth.js";
-import dashboardRoutes from "./routes/dashboard.js";
-import alertRoutes from "./routes/alerts.js";
-import assetRoutes from "./routes/assets.js";
-import reportRoutes from "./routes/reports.js";
-
 import { connectDB } from "./config/db.js";
 
 const app = express();
 
-// -------------------------
-// 1️⃣ Allowed Origins (CORS)
-// -------------------------
+/* ================= CORS ================= */
+
 const allowedOrigins = [
   "http://localhost:3000",
-  "https://securesite-9.onrender.com" // your static frontend
+  process.env.FRONTEND_URL, // Use a clear name for your frontend URL
+  process.env.NEXT_PUBLIC_API_URL, 
 ];
 
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true); // server-to-server or Postman
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-    callback(new Error("CORS blocked"));
-  },
-  credentials: true,
-  optionsSuccessStatus: 200
-}));
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (!origin) return callback(null, true);
+      // Fixed: uses indexOf or includes to check the array properly
+      if (allowedOrigins.indexOf(origin) !== -1) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true,
+  })
+);
 
-// -------------------------
-// 2️⃣ Middleware
-// -------------------------
+/* ================= BODY PARSING ================= */
+
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
-// -------------------------
-// 3️⃣ Static uploads
-// -------------------------
-const __dirname = path.resolve();
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+/* ================= REQUEST LOGGER ================= */
 
-// -------------------------
-// 4️⃣ API Routes
-// -------------------------
+app.use((req, res, next) => {
+  console.log(`📡 ${req.method} → ${req.url}`);
+  next();
+});
+
+/* ================= ROUTES ================= */
+
 app.use("/api", authRoutes);
-app.use("/api/dashboard", dashboardRoutes);
-app.use("/api/alerts", alertRoutes);
-app.use("/api/assets", assetRoutes);
-app.use("/api/reports", reportRoutes);
 
-// -------------------------
-// 5️⃣ Test MongoDB
-// -------------------------
-app.get("/test-db", async (req, res) => {
-  try {
-    const mongoose = await connectDB();
-    const serverStatus = await mongoose.connection.db.admin().serverStatus();
-    res.json({ mongoTime: serverStatus.localTime });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+/* ================= 404 HANDLER (FIXES THE JSON ERROR) ================= */
 
-// -------------------------
-// 6️⃣ Serve React frontend (optional for monorepo, can remove if using static site)
-// -------------------------
-const clientBuildPath = path.join(__dirname, "client/build");
-if (fs.existsSync(clientBuildPath)) {
-  app.use(express.static(clientBuildPath));
-  app.get("*", (req, res) => {
-    res.sendFile(path.join(clientBuildPath, "index.html"));
+// This ensures if a route is missing (like /api/verify-payment), 
+// you get JSON back instead of HTML.
+app.use((req, res) => {
+  res.status(404).json({ 
+    success: false, 
+    message: `Route ${req.originalUrl} not found.` 
   });
-}
-
-// -------------------------
-// 7️⃣ Root route
-// -------------------------
-app.get("/", (req, res) => {
-  res.send("🚀 Shield Backend is Running with MongoDB!");
 });
 
-// -------------------------
-// 8️⃣ Error handling
-// -------------------------
+/* ================= GLOBAL ERROR HANDLER ================= */
+
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ message: "Internal Server Error", error: err.message });
+  console.error("🔥 SERVER ERROR:", err.message);
+  res.status(err.status || 500).json({ 
+    success: false,
+    message: err.message || "Internal Server Error" 
+  });
 });
 
-// -------------------------
-// 9️⃣ Environment settings
-// -------------------------
-app.set("trust proxy", 1);
+/* ================= SERVER START ================= */
+
 const PORT = process.env.PORT || 5000;
 
-// -------------------------
-// 🔟 Connect DB → Start server
-// -------------------------
-connectDB().then(() => {
-  app.listen(PORT, () => {
-    console.log(`🚀 Shield Server running on port ${PORT}`);
+connectDB()
+  .then(() => {
+    app.listen(PORT, () =>
+      console.log(`🚀 Server running on http://localhost:${PORT}`)
+    );
+  })
+  .catch((err) => {
+    console.error("❌ DB CONNECTION FAILED:", err.message);
+    process.exit(1);
   });
-}).catch(err => {
-  console.error("MongoDB connection failed:", err);
-});

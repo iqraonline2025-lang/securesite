@@ -1,8 +1,7 @@
-// server/models/User.js
 import mongoose from "mongoose";
 
 /* ==============================
-   👤 User Schema
+    👤 User Schema
 ============================== */
 const userSchema = new mongoose.Schema(
   {
@@ -16,22 +15,23 @@ const userSchema = new mongoose.Schema(
     email: {
       type: String,
       required: true,
-      unique: true,
+      unique: true, // This automatically creates a high-performance index
       lowercase: true,
       trim: true,
       match: [/^\S+@\S+\.\S+$/, "Invalid email format"]
     },
 
-    // For manual login (null for Google users)
-    password_hash: {
+    // Matches the field name used in your bcrypt logic in auth.js
+    password: {
       type: String,
       default: null
     },
 
     plan_tier: {
       type: String,
-      enum: ["Free", "Premium", "Business", "Lab"],
-      default: "Free"
+      enum: ["free", "pro", "premium", "business", "accessibility", "lab"],
+      lowercase: true, 
+      default: "free"
     },
 
     total_alerts: {
@@ -48,7 +48,7 @@ const userSchema = new mongoose.Schema(
     },
 
     /* ==============================
-       📧 Email Verification
+        📧 Email Verification
     ============================= */
     verification_code: {
       type: String,
@@ -68,9 +68,6 @@ const userSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-/* ==============================
-   📧 Index for fast email lookup
-============================== */
-userSchema.index({ email: 1 });
+// Removed the manual index here to fix the "Duplicate schema index" warning.
 
 export default mongoose.model("User", userSchema);

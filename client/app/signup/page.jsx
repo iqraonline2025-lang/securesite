@@ -1,108 +1,108 @@
 "use client";
-
-import React, { useState, useEffect, Suspense } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
-import Link from "next/link";
-import Image from "next/image";
-import { motion, AnimatePresence } from "framer-motion";
+import React, { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { GoogleLogin, GoogleOAuthProvider } from "@react-oauth/google";
 import {
-  User, Zap, Building2, GraduationCap,
-  CheckCircle2, Loader2, ArrowLeft, Mail, Lock
+  ShieldCheck,
+  ChevronLeft,
+  Loader2,
+  Globe,
+  Briefcase,
+  Accessibility,
+  CheckCircle2,
+  Cpu,
+  ArrowRight
 } from "lucide-react";
-import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
-import { loadStripe } from "@stripe/stripe-js";
-import { Elements } from "@stripe/react-stripe-js";
-import CheckoutForm from "../components/CheckoutForm";
+import Image from "next/image";
+import StripeCheckout from "../components/CheckoutForm";
 import dogImage from "../public/dog-4.png";
+import { useRouter } from "next/navigation";
 
-/* ================= API & STRIPE ================= */
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://securesite-2fow.onrender.com";
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "");
-
-const PLANS = [
-  { id: "free", tier: "Free", icon: <User className="text-blue-400" size={24} />, price: "$0", desc: "Individual researchers", color: "from-blue-500/20" },
-  { id: "premium", tier: "Premium", icon: <Zap className="text-yellow-400" size={24} />, price: "$9", desc: "AI-driven detection", color: "from-yellow-500/20" },
-  { id: "business", tier: "Business", icon: <Building2 className="text-purple-400" size={24} />, price: "$49", desc: "Enterprise shield", color: "from-purple-500/20" },
-  { id: "lab", tier: "Lab", icon: <GraduationCap className="text-emerald-400" size={24} />, price: "$25", desc: "Academic toolkit", color: "from-emerald-500/20" },
-];
-
-export default function SignupPage() {
-  return (
-    <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || ""}>
-      <Suspense fallback={<LoadingScreen />}>
-        <SignupContent />
-      </Suspense>
-    </GoogleOAuthProvider>
-  );
-}
-
-function SignupContent() {
-  const searchParams = useSearchParams();
+export default function SecurityApp() {
   const router = useRouter();
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
+  // State Management
   const [step, setStep] = useState(1);
-  const [selectedPlan, setSelectedPlan] = useState(PLANS[0]);
-  const [isLogin, setIsLogin] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [selectedPlan, setSelectedPlan] = useState(null);
+  const [isLogin, setIsLogin] = useState(false); 
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [clientSecret, setClientSecret] = useState("");
-  const [formData, setFormData] = useState({ name: "", email: "", password: "" });
-  const [dogCode, setDogCode] = useState("");
-  const [dogError, setDogError] = useState("");
-  const [codeSent, setCodeSent] = useState(false);
+  const [generatedCode, setGeneratedCode] = useState("");
+  const [enteredCode, setEnteredCode] = useState("");
 
-  // Pre-select plan from URL
-  useEffect(() => {
-    const planId = searchParams.get("plan");
-    if (planId) {
-      const found = PLANS.find(p => p.id === planId);
-      if (found) setSelectedPlan(found);
-    }
-  }, [searchParams]);
+  const categories = [
+    { id: "individual", name: "Individual", icon: Globe, desc: "Personal Vault" },
+    { id: "business", name: "Business", icon: Briefcase, desc: "Enterprise Node" },
+    { id: "accessibility", name: "Accessibility", icon: Accessibility, desc: "Universal Access" }
+  ];
 
-  // Auto redirect after success
-  useEffect(() => {
-    if (step === 4) {
-      const t = setTimeout(() => router.push("/dashboard"), 3000);
-      return () => clearTimeout(t);
-    }
-  }, [step, router]);
+  const planData = {
+    individual: [
+      { id: "free", name: "Free Plan", price: "£0", features: ["Basic scam alerts", "Basic safety tips", "Limited dashboard", "Limited learning resources"] },
+      { id: "pro", name: "Pro Plan", price: "£5", features: ["Everything in Free", "Priority scam alerts", "Faster notifications", "Extra learning resources", "Ad-free experience"] },
+      { id: "premium", name: "Premium Plan", price: "£7", features: ["Everything in Pro", "Advanced scam detection", "Analytics dashboard", "Scam history + risk level", "Early access", "Priority support"] }
+    ],
+    business: [
+      { id: "business", name: "Monthly Business Plan", price: "£3,000–£6,000", features: ["Robotic dogs", "SecureMe App", "Maintenance & Repairs", "24/7 Support", "Monitoring dashboard", "Patrol routes"] }
+    ],
+    accessibility: [
+      { id: "accessibility", name: "Accessibility & Disability", price: "Contact us", features: ["Support for disabled individuals", "Vulnerable user monitoring", "Mobility assistance", "Subsidized technology"] }
+    ]
+  };
 
-  const initPayment = async (tier, email) => {
-    try {
-      const res = await fetch(`${API_BASE}/api/create-payment-intent`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planTier: tier, email }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
-      setClientSecret(data.clientSecret);
-      setStep(3);
-    } catch (err) {
-      alert(err.message || "Payment initialization failed");
+  // 1. Initial Auth Check
+  const handleAuth = async () => {
+    if (!email || !password) return alert("Please enter both email and password.");
+    
+    if (isLogin) {
+      setLoading(true);
+      try {
+        const res = await fetch(`${API_URL}/api/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            email, 
+            password,
+            isNewUser: false 
+          }),
+        });
+        const data = await res.json();
+        
+        if (!res.ok) throw new Error(data.message || "Invalid credentials");
+        
+        localStorage.setItem("user", JSON.stringify(data.user));
+        generateMasterKey();
+      } catch (err) {
+        alert(err.message);
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      // If Signup flow, move to payment or master key first. 
+      selectedPlan === "free" ? generateMasterKey() : setStep(4);
     }
   };
 
-  const handleGoogleAuth = async (cred) => {
+  // 2. Google Login Flow
+  const handleGoogleLogin = async (credentialResponse) => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/google-login`, {
+      const res = await fetch(`${API_URL}/api/google-login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: cred.credential, planTier: selectedPlan.tier }),
+        body: JSON.stringify({ 
+          token: credentialResponse.credential, 
+          planTier: selectedPlan || "free" 
+        }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
+      if (!res.ok) throw new Error(data.error || "Google Authentication Failed");
 
-      if (selectedPlan.id === "free") {
-        localStorage.setItem("user", JSON.stringify(data.user));
-        setStep(4);
-      } else if (["business", "lab"].includes(selectedPlan.id)) {
-        setFormData(prev => ({ ...prev, email: data.user.email }));
-        await sendDogCode(data.user.email);
-      } else {
-        await initPayment(selectedPlan.tier, data.user.email);
-      }
+      localStorage.setItem("user", JSON.stringify(data.user));
+      generateMasterKey();
     } catch (err) {
       alert(err.message);
     } finally {
@@ -110,294 +110,164 @@ function SignupContent() {
     }
   };
 
-  const handleAuthSubmit = async (e) => {
-    e.preventDefault();
+  const generateMasterKey = () => {
+    setGeneratedCode(Math.floor(100000 + Math.random() * 900000).toString());
+    setStep(5);
+  };
+
+  // 3. Final Step: Signup Creation & Verification
+  const finalizeAndEnter = async () => {
+    if (enteredCode !== generatedCode) return alert("Master Key Mismatch");
+
     setLoading(true);
     try {
-      const endpoint = isLogin ? "/api/login" : "/api/signup";
-      const res = await fetch(`${API_BASE}${endpoint}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...formData, planTier: selectedPlan.tier }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
+      if (!isLogin) {
+        const res = await fetch(`${API_URL}/api/signup`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            email, 
+            password, 
+            planTier: selectedPlan,
+            isNewUser: true 
+          }),
+        });
+        const data = await res.json();
 
-      if (selectedPlan.id === "free") {
+        // FIX: If user already exists, suggest login
+        if (!res.ok) {
+            if (data.message.includes("exists")) {
+                alert("This operative is already registered. Switching to Login.");
+                setIsLogin(true);
+                setStep(3); // Go back to Login step
+                return;
+            }
+            throw new Error(data.message || "Signup failed");
+        }
         localStorage.setItem("user", JSON.stringify(data.user));
-        setStep(4);
-      } else if (["business", "lab"].includes(selectedPlan.id)) {
-        await sendDogCode(formData.email);
-      } else {
-        await initPayment(selectedPlan.tier, formData.email);
       }
+
+      localStorage.setItem("isVerified", "true");
+      // Redirect to HOME (/) instead of login page if that is your goal
+      // But typically dashboard is the post-auth destination
+      router.replace("/dashboard");
     } catch (err) {
       alert(err.message);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const sendDogCode = async (email) => {
-    try {
-      const res = await fetch(`${API_BASE}/api/send-code`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
-      if (!res.ok) throw new Error("Failed to send verification code");
-      setStep(3);
-      setCodeSent(true);
-    } catch (err) {
-      console.error(err);
-      alert(err.message);
-    }
-  };
-
-  const handleDogCodeSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const res = await fetch(`${API_BASE}/api/verify-code`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: formData.email, code: dogCode }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
-
-      localStorage.setItem("user", JSON.stringify(data.user || { email: formData.email }));
-      setDogCode("");
-      setStep(4);
-    } catch (err) {
-      setDogError("Invalid verification code");
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] text-zinc-100 flex flex-col items-center justify-center p-6 relative overflow-hidden font-sans">
-      {/* Background blobs */}
-      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-blue-600/10 blur-[120px] rounded-full animate-pulse" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-purple-600/10 blur-[120px] rounded-full animate-pulse" />
+    <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID}>
+      <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center p-6 font-sans">
+        <AnimatePresence mode="wait">
 
-      {/* Exit button */}
-      <Link href="/">
-        <button className="absolute top-8 left-8 flex items-center gap-2 bg-zinc-900/50 hover:bg-zinc-800 border border-white/5 px-4 py-2 rounded-full transition-all text-sm font-medium backdrop-blur-md z-50">
-          <ArrowLeft size={16} /> Exit
-        </button>
-      </Link>
-
-      <AnimatePresence mode="wait">
-        {/* STEP 1 — PLAN SELECT */}
-        {step === 1 && (
-          <motion.div key="1" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} className="max-w-5xl w-full">
-            <div className="text-center mb-12">
-              <h1 className="text-4xl md:text-6xl font-black tracking-tight mb-4 bg-gradient-to-b from-white to-zinc-500 bg-clip-text text-transparent">
-                CHOOSE YOUR PLAN
-              </h1>
-              <p className="text-zinc-400 text-lg">Select the infrastructure that powers your research.</p>
-            </div>
-            <div className="grid md:grid-cols-4 gap-4">
-              {PLANS.map(p => (
-                <motion.div
-                  key={p.id}
-                  whileHover={{ y: -5 }}
-                  onClick={() => { setSelectedPlan(p); setStep(2); }}
-                  className={`relative p-8 rounded-[2rem] border transition-all duration-300 cursor-pointer group overflow-hidden
-                    ${selectedPlan.id === p.id ? "border-blue-500 shadow-[0_0_30px_-10px_rgba(59,130,246,0.5)]" : "border-white/5 bg-zinc-900/40 hover:bg-zinc-800/60"}`}
-                >
-                  <div className={`absolute inset-0 bg-gradient-to-br ${p.color} to-transparent opacity-0 group-hover:opacity-100 transition-opacity`} />
-                  <div className="relative z-10">
-                    <div className="p-3 bg-black/40 rounded-2xl w-fit mb-6 border border-white/5">{p.icon}</div>
-                    <h3 className="text-xl font-bold mb-1">{p.tier}</h3>
-                    <p className="text-zinc-500 text-sm leading-snug mb-6">{p.desc}</p>
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-3xl font-black">{p.price}</span>
-                      <span className="text-xs text-zinc-500 font-medium">/mo</span>
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </motion.div>
-        )}
-
-        {/* STEP 2 — AUTH */}
-        {step === 2 && (
-          <motion.div key="2" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="max-w-md w-full">
-            <div className="bg-zinc-900/40 border border-white/10 p-10 rounded-[2.5rem] backdrop-blur-xl shadow-2xl">
-              <div className="text-center mb-8">
-                <h2 className="text-3xl font-bold mb-2 italic uppercase tracking-tighter">
-                  {isLogin ? "Welcome Back" : "Initialize Account"}
-                </h2>
-                <p className="text-zinc-500 text-sm italic">Plan: {selectedPlan.tier}</p>
+          {/* STEP 1: Sector Selection */}
+          {step === 1 && (
+            <motion.div key="s1" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="w-full max-w-5xl">
+              <h1 className="text-5xl font-black italic uppercase text-center mb-12 tracking-tighter text-blue-500">Select Sector</h1>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {categories.map((cat) => (
+                  <button key={cat.id} onClick={() => { setSelectedCategory(cat.id); setStep(2); }} className="bg-zinc-900/40 border border-white/10 p-10 rounded-[2.5rem] text-left hover:border-blue-500 transition-all group">
+                    <cat.icon className="text-blue-500 mb-6 group-hover:scale-110 transition-transform" size={32} />
+                    <h3 className="text-2xl font-black uppercase italic">{cat.name}</h3>
+                    <p className="text-zinc-500 text-xs mt-2 uppercase font-bold tracking-widest">{cat.desc}</p>
+                  </button>
+                ))}
               </div>
+            </motion.div>
+          )}
 
-              <div className="flex justify-center mb-8">
-                <GoogleLogin onSuccess={handleGoogleAuth} theme="filled_black" shape="pill" />
-              </div>
-
-              <div className="relative flex items-center my-6">
-                <div className="flex-grow border-t border-white/5"></div>
-                <span className="mx-4 text-xs font-bold text-zinc-600 uppercase tracking-widest">Or continue with</span>
-                <div className="flex-grow border-t border-white/5"></div>
-              </div>
-
-              <form onSubmit={handleAuthSubmit} className="space-y-4">
-                {!isLogin && (
-                  <div className="relative">
-                    <User className="absolute left-4 top-3.5 text-zinc-500" size={18} />
-                    <input
-                      required
-                      placeholder="Full Name"
-                      className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-black/40 border border-white/5 focus:border-blue-500/50 outline-none transition-all placeholder:text-zinc-600"
-                      onChange={e => setFormData({ ...formData, name: e.target.value })}
-                    />
-                  </div>
-                )}
-                <div className="relative">
-                  <Mail className="absolute left-4 top-3.5 text-zinc-500" size={18} />
-                  <input
-                    required
-                    type="email"
-                    placeholder="Email Address"
-                    className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-black/40 border border-white/5 focus:border-blue-500/50 outline-none transition-all placeholder:text-zinc-600"
-                    onChange={e => setFormData({ ...formData, email: e.target.value })}
-                  />
-                </div>
-                <div className="relative">
-                  <Lock className="absolute left-4 top-3.5 text-zinc-500" size={18} />
-                  <input
-                    required
-                    type="password"
-                    placeholder="Password"
-                    className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-black/40 border border-white/5 focus:border-blue-500/50 outline-none transition-all placeholder:text-zinc-600"
-                    onChange={e => setFormData({ ...formData, password: e.target.value })}
-                  />
-                </div>
-
-                <button
-                  disabled={loading}
-                  className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-2xl transition-all shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 group"
-                >
-                  {loading ? <Loader2 className="animate-spin" /> : (
-                    <>
-                      {isLogin ? "Sign In" : "Create Account"}
-                      <Zap size={16} className="group-hover:translate-x-1 transition-transform" />
-                    </>
-                  )}
-                </button>
-              </form>
-
-              <button
-                onClick={() => setIsLogin(!isLogin)}
-                className="mt-6 text-xs font-bold text-zinc-500 hover:text-white transition-colors w-full uppercase tracking-widest"
-              >
-                {isLogin ? "Need an account? Sign Up" : "Already registered? Log In"}
+          {/* STEP 2: Plan Selection */}
+          {step === 2 && selectedCategory && (
+            <motion.div key="s2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="w-full max-w-6xl">
+              <button onClick={() => setStep(1)} className="flex items-center gap-2 text-zinc-500 mb-8 font-black uppercase text-[10px] hover:text-white transition-colors">
+                <ChevronLeft size={16} /> Back to Sectors
               </button>
-            </div>
-          </motion.div>
-        )}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {planData[selectedCategory].map((plan) => (
+                  <div key={plan.id} className="bg-zinc-900/40 border border-white/10 p-8 rounded-[2.5rem] flex flex-col justify-between hover:border-blue-500/50 transition-all">
+                    <div>
+                      <h3 className="text-zinc-500 text-xs font-black uppercase mb-4">{plan.name}</h3>
+                      <div className="text-4xl font-black mb-6 tracking-tighter">{plan.price}</div>
+                      <ul className="space-y-4 mb-8">
+                        {plan.features.map(f => (
+                          <li key={f} className="flex items-center text-sm text-zinc-400 font-medium">
+                            <CheckCircle2 size={16} className="text-blue-500 mr-3 flex-shrink-0" /> {f}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <button onClick={() => { setSelectedPlan(plan.id); setStep(3); }} className="w-full bg-white text-black py-4 rounded-2xl font-black uppercase text-[10px] hover:bg-blue-600 hover:text-white transition-all">
+                      Confirm Plan
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
 
-        {/* STEP 3 — DOG VERIFICATION / PAYMENT */}
-        {step === 3 && ["business", "lab"].includes(selectedPlan.id) && (
-          <DogVerification formData={formData} dogCode={dogCode} setDogCode={setDogCode} dogError={dogError} handleDogCodeSubmit={handleDogCodeSubmit} />
-        )}
+          {/* STEP 3: Identity Setup */}
+          {step === 3 && (
+            <motion.div key="s3" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full max-w-md bg-zinc-900/90 p-10 rounded-[3rem] border border-white/10 backdrop-blur-xl text-center space-y-6">
+              <ShieldCheck className="mx-auto text-blue-500 mb-4" size={40} />
+              <h2 className="text-xs font-black uppercase tracking-[0.2em]">{isLogin ? "Operative Login" : "Initialize Identity"}</h2>
+              
+              <button onClick={() => setIsLogin(!isLogin)} className="text-[10px] underline text-blue-400 font-bold uppercase tracking-widest">
+                {isLogin ? "New here? Create Account" : "Existing Operative? Login"}
+              </button>
 
-        {step === 3 && selectedPlan.id === "premium" && clientSecret && (
-          <motion.div key="payment" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-md w-full">
-            <div className="bg-zinc-900/40 border border-white/10 p-8 rounded-[2.5rem]">
-              <h2 className="text-2xl font-bold mb-6 text-center italic">Secure Checkout</h2>
-              <Elements stripe={stripePromise} options={{ clientSecret, appearance: { theme: 'night' } }}>
-                <CheckoutForm
-                  amount={selectedPlan.price.replace("$","")}
-                  onSuccess={(user) => { localStorage.setItem("user", JSON.stringify(user)); setStep(4); }}
-                />
-              </Elements>
-            </div>
-          </motion.div>
-        )}
+              <div className="space-y-4 mt-4">
+                <input type="email" placeholder="EMAIL" className="w-full p-4 bg-black rounded-xl border border-white/5 outline-none focus:border-blue-500 transition-all text-xs font-mono" value={email} onChange={e => setEmail(e.target.value)} />
+                <input type="password" placeholder="PASSWORD" className="w-full p-4 bg-black rounded-xl border border-white/5 outline-none focus:border-blue-500 transition-all text-xs font-mono" value={password} onChange={e => setPassword(e.target.value)} />
+                <button onClick={handleAuth} disabled={loading} className="w-full bg-blue-600 py-4 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-blue-500 transition-all flex justify-center items-center">
+                  {loading ? <Loader2 className="animate-spin" /> : isLogin ? "Authorize Login" : "Continue"}
+                </button>
+                <div className="flex justify-center mt-4">
+                  <GoogleLogin onSuccess={handleGoogleLogin} theme="filled_black" shape="pill" />
+                </div>
+              </div>
+            </motion.div>
+          )}
 
-        {/* STEP 4 — SUCCESS */}
-        {step === 4 && (
-          <motion.div key="4" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="text-center">
-            <div className="relative mb-8">
-              <div className="absolute inset-0 bg-emerald-500/20 blur-3xl rounded-full" />
-              <CheckCircle2 size={100} className="text-emerald-500 mx-auto relative z-10 animate-bounce" />
-            </div>
-            <h2 className="text-5xl font-black italic uppercase tracking-tighter mb-2">Access Granted</h2>
-            <p className="text-zinc-500 font-medium">Syncing with secure infrastructure...</p>
-          </motion.div>
-        )}
+          {/* STEP 4: Payment */}
+          {step === 4 && (
+             <motion.div key="s4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full max-w-md bg-zinc-900/90 p-10 rounded-[3rem] border border-white/10">
+               <h2 className="text-center font-black uppercase italic mb-6">Finalize Secure Payment</h2>
+               <StripeCheckout planTier={selectedPlan} onSuccess={generateMasterKey} />
+             </motion.div>
+          )}
 
-      </AnimatePresence>
-    </div>
-  );
-}
+          {/* STEP 5: Key Generation Display */}
+          {step === 5 && (
+            <motion.div key="s5" className="text-center space-y-8">
+              <Image src={dogImage} alt="Dog" width={256} height={256} className="mx-auto rounded-2xl shadow-lg border border-blue-500/20" unoptimized />
+              <Cpu size={60} className="mx-auto text-blue-500 animate-pulse" />
+              <h2 className="text-xs font-black uppercase tracking-[0.3em] text-zinc-500">Security Key Generated</h2>
+              <div className="bg-black border-2 border-blue-600 p-12 rounded-[2.5rem] text-5xl font-mono tracking-[0.5rem] text-blue-400">
+                {generatedCode}
+              </div>
+              <button onClick={() => setStep(6)} className="bg-white text-black px-12 py-6 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-blue-600 hover:text-white transition-all">
+                I have saved this key <ArrowRight size={18} className="inline ml-2"/>
+              </button>
+            </motion.div>
+          )}
 
-function DogVerification({ formData, dogCode, setDogCode, dogError, handleDogCodeSubmit }) {
-  return (
-    <motion.div key="dog" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-md w-full">
-      <div className="bg-zinc-950 border border-white/10 rounded-[2.5rem] overflow-hidden backdrop-blur-3xl shadow-2xl">
-        <div className="bg-white/5 px-6 py-3 border-b border-white/5 flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-emerald-500">System Link Active</span>
-          </div>
-          <span className="text-[10px] font-mono text-zinc-500">ID: UNIT_K9_PRO</span>
-        </div>
+          {/* STEP 6: Final Verification Code */}
+          {step === 6 && (
+            <motion.div key="s6" className="text-center space-y-8 max-w-sm w-full">
+              <ShieldCheck size={50} className="mx-auto text-green-500" />
+              <h2 className="text-xs font-black uppercase tracking-widest">Verify Synchronization</h2>
+              <input type="text" maxLength={6} placeholder="000000" className="w-full p-6 bg-zinc-900 rounded-[2rem] text-center text-4xl font-mono border border-white/10 outline-none focus:border-green-500 transition-all" value={enteredCode} onChange={e => setEnteredCode(e.target.value)} />
+              <button onClick={finalizeAndEnter} disabled={loading} className="w-full bg-green-600 py-6 rounded-2xl font-black uppercase text-[10px] tracking-widest flex justify-center items-center">
+                {loading ? <Loader2 className="animate-spin" /> : "Authorize Dashboard Access"}
+              </button>
+            </motion.div>
+          )}
 
-        <div className="p-8">
-          <div className="relative group mb-8">
-            <div className="absolute inset-0 z-10 pointer-events-none overflow-hidden rounded-3xl">
-              <motion.div 
-                initial={{ top: "-10%" }}
-                animate={{ top: "110%" }}
-                transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-                className="w-full h-[2px] bg-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.8)] relative"
-              />
-            </div>
-
-            <div className="bg-gradient-to-b from-zinc-900 to-black p-6 rounded-3xl border border-white/5 relative overflow-hidden">
-              <Image
-                src={dogImage}
-                width={200}
-                height={200}
-                alt="robotic unit"
-                className="mx-auto drop-shadow-[0_0_30px_rgba(59,130,246,0.2)] grayscale group-hover:grayscale-0 transition-all duration-700"
-                unoptimized
-              />
-            </div>
-          </div>
-
-          <div className="text-center mb-6">
-            <h3 className="text-xl font-bold tracking-tight">Biometric Override Required</h3>
-            <p className="text-zinc-500 text-xs mt-2 leading-relaxed">
-              Enter the 6-digit encryption key dispatched to <br/>
-              <span className="text-zinc-300 font-medium">{formData.email}</span>.
-            </p>
-          </div>
-
-          <form onSubmit={handleDogCodeSubmit} className="space-y-4">
-            <input
-              value={dogCode}
-              onChange={e => setDogCode(e.target.value)}
-              maxLength={6}
-              placeholder="000000"
-              className="w-full p-4 rounded-2xl bg-black border border-white/10 text-center font-mono text-2xl tracking-[0.3em] text-blue-400 focus:outline-none focus:border-blue-500 transition-all"
-            />
-            {dogError && <p className="text-red-500 text-center text-xs">{dogError}</p>}
-            <button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-2xl transition-all">Verify</button>
-          </form>
-        </div>
+        </AnimatePresence>
       </div>
-    </motion.div>
-  );
-}
-
-function LoadingScreen() {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-[#050505]">
-      <Loader2 className="animate-spin text-blue-500" size={48} />
-    </div>
+    </GoogleOAuthProvider>
   );
 }
