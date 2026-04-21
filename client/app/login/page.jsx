@@ -1,6 +1,7 @@
 "use client";
 import React, { useState } from "react";
 import { Lock, Mail, Loader2, Eye, EyeOff, Shield, ArrowLeft } from "lucide-react";
+// Change: Import GoogleLogin separately if needed, but the provider is key
 import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -8,7 +9,13 @@ import { motion } from "framer-motion";
 
 export default function LoginPage() {
   return (
-    <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID}>
+    /* FIX: use_fedcm_for_prompt helps resolve the COOP/postMessage 
+       block in modern Chrome versions.
+    */
+    <GoogleOAuthProvider 
+      clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID}
+      use_fedcm_for_prompt={true} 
+    >
       <LoginContent />
     </GoogleOAuthProvider>
   );
@@ -21,6 +28,7 @@ function LoginContent() {
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
+  // Ensure this environment variable is set to https://securesite-12.onrender.com on Vercel
   const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
   const handleLogin = async (e) => {
@@ -75,6 +83,7 @@ function LoginContent() {
   return (
     <div className="min-h-screen bg-[#050505] text-white flex flex-col items-center justify-center p-6 relative overflow-hidden font-sans">
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/10 blur-[120px] rounded-full" />
+      
       <Link href="/">
         <motion.button whileHover={{ x: -5 }} className="absolute top-10 left-10 z-50 flex items-center gap-3 px-5 py-3 bg-zinc-900/50 border border-white/5 rounded-2xl hover:bg-white/5 transition-all group">
           <ArrowLeft size={16} className="text-zinc-500 group-hover:text-white" />
@@ -91,7 +100,12 @@ function LoginContent() {
         </div>
 
         <div className="w-full mb-6 overflow-hidden rounded-xl flex justify-center border border-white/5 p-1 bg-black/20">
-          <GoogleLogin onSuccess={handleGoogleSuccess} onError={() => setError("Google Auth Failed")} theme="filled_black" shape="pill" />
+          <GoogleLogin 
+            onSuccess={handleGoogleSuccess} 
+            onError={() => setError("Google Auth Failed")} 
+            theme="filled_black" 
+            shape="pill" 
+          />
         </div>
 
         {error && <div className="bg-red-500/10 border border-red-500/20 text-red-500 text-[10px] font-black uppercase p-4 rounded-xl mb-6 text-center">{error}</div>}
@@ -99,11 +113,23 @@ function LoginContent() {
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="relative group">
             <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600" size={18} />
-            <input type="email" placeholder="Email Address" required className="w-full bg-black/40 border border-zinc-800 p-4 pl-12 rounded-xl focus:border-blue-500 outline-none" onChange={(e) => setFormData({ ...formData, email: e.target.value })} />
+            <input 
+              type="email" 
+              placeholder="Email Address" 
+              required 
+              className="w-full bg-black/40 border border-zinc-800 p-4 pl-12 rounded-xl focus:border-blue-500 outline-none" 
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })} 
+            />
           </div>
           <div className="relative group">
             <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600" size={18} />
-            <input type={showPassword ? "text" : "password"} placeholder="Password" required className="w-full bg-black/40 border border-zinc-800 p-4 pl-12 pr-12 rounded-xl focus:border-blue-500 outline-none" onChange={(e) => setFormData({ ...formData, password: e.target.value })} />
+            <input 
+              type={showPassword ? "text" : "password"} 
+              placeholder="Password" 
+              required 
+              className="w-full bg-black/40 border border-zinc-800 p-4 pl-12 pr-12 rounded-xl focus:border-blue-500 outline-none" 
+              onChange={(e) => setFormData({ ...formData, password: e.target.value })} 
+            />
             <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-600">
               {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>

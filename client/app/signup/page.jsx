@@ -53,7 +53,7 @@ export default function SecurityApp() {
     ]
   };
 
-  // 1. Initial Auth Check
+  // 1. Email/Password Auth Check
   const handleAuth = async () => {
     if (!email || !password) return alert("Please enter both email and password.");
     
@@ -63,30 +63,25 @@ export default function SecurityApp() {
         const res = await fetch(`${API_URL}/api/login`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            email, 
-            password,
-            isNewUser: false 
-          }),
+          body: JSON.stringify({ email, password }),
         });
         const data = await res.json();
-        
         if (!res.ok) throw new Error(data.message || "Invalid credentials");
         
         localStorage.setItem("user", JSON.stringify(data.user));
-        generateMasterKey();
+        generateMasterKey(); // Login skips checkout
       } catch (err) {
         alert(err.message);
       } finally {
         setLoading(false);
       }
     } else {
-      // If Signup flow, move to payment or master key first. 
+      // Signup flow: Check if payment is needed
       selectedPlan === "free" ? generateMasterKey() : setStep(4);
     }
   };
 
-  // 2. Google Login Flow
+  // 2. FIXED: Google Login Flow (Now matches Signup Path)
   const handleGoogleLogin = async (credentialResponse) => {
     setLoading(true);
     try {
@@ -102,7 +97,15 @@ export default function SecurityApp() {
       if (!res.ok) throw new Error(data.error || "Google Authentication Failed");
 
       localStorage.setItem("user", JSON.stringify(data.user));
-      generateMasterKey();
+
+      // REDIRECT LOGIC
+      if (isLogin) {
+        // Just logging in? Go to keys
+        generateMasterKey();
+      } else {
+        // Signing up? Follow the money (Checkout) or go to keys (Free)
+        selectedPlan === "free" ? generateMasterKey() : setStep(4);
+      }
     } catch (err) {
       alert(err.message);
     } finally {
@@ -115,7 +118,7 @@ export default function SecurityApp() {
     setStep(5);
   };
 
-  // 3. Final Step: Signup Creation & Verification
+  // 3. Final Verification
   const finalizeAndEnter = async () => {
     if (enteredCode !== generatedCode) return alert("Master Key Mismatch");
 
@@ -133,23 +136,11 @@ export default function SecurityApp() {
           }),
         });
         const data = await res.json();
-
-        // FIX: If user already exists, suggest login
-        if (!res.ok) {
-            if (data.message.includes("exists")) {
-                alert("This operative is already registered. Switching to Login.");
-                setIsLogin(true);
-                setStep(3); // Go back to Login step
-                return;
-            }
-            throw new Error(data.message || "Signup failed");
-        }
+        if (!res.ok) throw new Error(data.message || "Signup failed");
         localStorage.setItem("user", JSON.stringify(data.user));
       }
 
       localStorage.setItem("isVerified", "true");
-      // Redirect to HOME (/) instead of login page if that is your goal
-      // But typically dashboard is the post-auth destination
       router.replace("/dashboard");
     } catch (err) {
       alert(err.message);
@@ -159,7 +150,10 @@ export default function SecurityApp() {
   };
 
   return (
-    <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID}>
+    <GoogleOAuthProvider 
+      clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID}
+      use_fedcm_for_prompt={true} // FIXES COOP ERROR
+    >
       <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center p-6 font-sans">
         <AnimatePresence mode="wait">
 

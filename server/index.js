@@ -6,48 +6,51 @@ import { connectDB } from "./config/db.js";
 
 const app = express();
 
-/* ================= CORS ================= */
+/* ================= 1. FIXED CORS SETUP ================= */
 
 const allowedOrigins = [
   "http://localhost:3000",
-  process.env.FRONTEND_URL, // Use a clear name for your frontend URL
-  process.env.NEXT_PUBLIC_API_URL, 
+  "https://securesite-eta.vercel.app", // FIXED: Removed the trailing slash "/"
+  "https://securesite-12.onrender.com"
 ];
 
 app.use(
   cors({
     origin: function (origin, callback) {
+      // Allow requests with no origin (like mobile apps or curl)
       if (!origin) return callback(null, true);
-      // Fixed: uses indexOf or includes to check the array properly
-      if (allowedOrigins.indexOf(origin) !== -1) {
+
+      if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
+        // This will show up in your Render logs if a request is blocked
+        console.error(`🚫 CORS Blocked for origin: ${origin}`);
         callback(new Error("Not allowed by CORS"));
       }
     },
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"]
   })
 );
 
-/* ================= BODY PARSING ================= */
+/* ================= 2. MIDDLEWARE ================= */
 
 app.use(express.json());
 
-/* ================= REQUEST LOGGER ================= */
-
+// Request Logger: Check your Render logs to see if requests are hitting the server
 app.use((req, res, next) => {
   console.log(`📡 ${req.method} → ${req.url}`);
   next();
 });
 
-/* ================= ROUTES ================= */
+/* ================= 3. ROUTES ================= */
 
 app.use("/api", authRoutes);
 
-/* ================= 404 HANDLER (FIXES THE JSON ERROR) ================= */
+/* ================= 4. ERROR HANDLING ================= */
 
-// This ensures if a route is missing (like /api/verify-payment), 
-// you get JSON back instead of HTML.
+// Handles 404s for missing routes
 app.use((req, res) => {
   res.status(404).json({ 
     success: false, 
@@ -55,24 +58,23 @@ app.use((req, res) => {
   });
 });
 
-/* ================= GLOBAL ERROR HANDLER ================= */
-
+// Global Error Handler
 app.use((err, req, res, next) => {
-  console.error("🔥 SERVER ERROR:", err.message);
+  console.error("🔥 SERVER ERROR:", err.stack);
   res.status(err.status || 500).json({ 
     success: false,
     message: err.message || "Internal Server Error" 
   });
 });
 
-/* ================= SERVER START ================= */
+/* ================= 5. SERVER START ================= */
 
 const PORT = process.env.PORT || 5000;
 
 connectDB()
   .then(() => {
     app.listen(PORT, () =>
-      console.log(`🚀 Server running on http://localhost:${PORT}`)
+      console.log(`🚀 Server running on port ${PORT}`)
     );
   })
   .catch((err) => {
